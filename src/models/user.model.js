@@ -3,8 +3,9 @@ import { USER_ROLES } from '../constants/index.js';
 
 const userSchema = new mongoose.Schema(
   {
-    name: {
+    nombre: {
       type: String,
+      alias: 'name',
       required: [true, 'El nombre es obligatorio'],
       trim: true,
     },
@@ -18,18 +19,22 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       required: [true, 'La contraseña es obligatoria'],
+      default: 'password123',
     },
-    role: {
+    rol: {
       type: String,
+      alias: 'role',
       enum: {
         values: Object.values(USER_ROLES),
         message: 'Rol no válido: {VALUE}',
       },
-      default: USER_ROLES.USER,
+      default: USER_ROLES.CLIENTE,
     },
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 );
 

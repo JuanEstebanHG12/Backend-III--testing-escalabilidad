@@ -21,6 +21,13 @@ export class UserRepository {
   }
 
   /**
+   * Busca usuarios por rol específico (ej. 'repartidor' o 'cliente').
+   */
+  async getByRole(rol) {
+    return await UserModel.find({ rol }).select('-password -__v').lean();
+  }
+
+  /**
    * Busca un usuario por correo electrónico.
    * Por defecto no incluye la contraseña, pero permite incluirla si fuera necesario para autenticación.
    */
@@ -44,6 +51,19 @@ export class UserRepository {
   }
 
   /**
+   * Inserta múltiples usuarios por lote (para seeding controlado).
+   */
+  async createMany(usersArray) {
+    const inserted = await UserModel.insertMany(usersArray);
+    return inserted.map((user) => {
+      const userObject = user.toObject();
+      delete userObject.password;
+      delete userObject.__v;
+      return userObject;
+    });
+  }
+
+  /**
    * Actualiza los datos de un usuario por su ID.
    */
   async update(id, updateData) {
@@ -60,5 +80,12 @@ export class UserRepository {
    */
   async delete(id) {
     return await UserModel.findByIdAndDelete(id).select('-password -__v').lean();
+  }
+
+  /**
+   * Limpia todos los usuarios (útil para pruebas y reseteo).
+   */
+  async deleteAll() {
+    return await UserModel.deleteMany({});
   }
 }

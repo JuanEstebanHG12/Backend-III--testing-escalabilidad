@@ -35,7 +35,10 @@ export class UserService {
    * Registra un nuevo usuario validando unicidad de correo y asignando roles seguros.
    */
   async createUser(userData) {
-    const { name, email, password, role } = userData;
+    const name = (userData.nombre || userData.name || '').trim();
+    const email = (userData.email || '').trim().toLowerCase();
+    const password = userData.password || 'password123';
+    const roleInput = userData.rol || userData.role;
 
     if (!name || !email || !password) {
       const error = new Error('Los campos nombre, correo y contraseña son obligatorios');
@@ -43,33 +46,31 @@ export class UserService {
       throw error;
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
-
     // Regla de negocio: no permitir emails duplicados
-    const existingUser = await this.userRepository.getByEmail(normalizedEmail);
+    const existingUser = await this.userRepository.getByEmail(email);
     if (existingUser) {
-      const error = new Error(`El correo ${normalizedEmail} ya se encuentra registrado`);
+      const error = new Error(`El correo ${email} ya se encuentra registrado`);
       error.statusCode = 400;
       throw error;
     }
 
     // Regla de negocio: validar el rol usando constantes
-    let assignedRole = USER_ROLES.USER;
-    if (role) {
+    let assignedRole = USER_ROLES.CLIENTE;
+    if (roleInput) {
       const validRoles = Object.values(USER_ROLES);
-      if (!validRoles.includes(role)) {
-        const error = new Error(`Rol inválido: ${role}. Roles permitidos: ${validRoles.join(', ')}`);
+      if (!validRoles.includes(roleInput)) {
+        const error = new Error(`Rol inválido: ${roleInput}. Roles permitidos: ${validRoles.join(', ')}`);
         error.statusCode = 400;
         throw error;
       }
-      assignedRole = role;
+      assignedRole = roleInput;
     }
 
     const newUser = {
-      name: name.trim(),
-      email: normalizedEmail,
-      password: password, // En módulos posteriores se agregará bcrypt/hashing
-      role: assignedRole,
+      nombre: name,
+      email,
+      password,
+      rol: assignedRole,
     };
 
     return await this.userRepository.create(newUser);
@@ -93,13 +94,23 @@ export class UserService {
       }
     }
 
-    if (dataToUpdate.role) {
+    if (dataToUpdate.nombre) {
+      dataToUpdate.nombre = dataToUpdate.nombre.trim();
+    }
+
+    if (dataToUpdate.name) {
+      dataToUpdate.nombre = dataToUpdate.name.trim();
+    }
+
+    const roleToUpdate = dataToUpdate.rol || dataToUpdate.role;
+    if (roleToUpdate) {
       const validRoles = Object.values(USER_ROLES);
-      if (!validRoles.includes(dataToUpdate.role)) {
-        const error = new Error(`Rol inválido: ${dataToUpdate.role}. Roles permitidos: ${validRoles.join(', ')}`);
+      if (!validRoles.includes(roleToUpdate)) {
+        const error = new Error(`Rol inválido: ${roleToUpdate}. Roles permitidos: ${validRoles.join(', ')}`);
         error.statusCode = 400;
         throw error;
       }
+      dataToUpdate.rol = roleToUpdate;
     }
 
     return await this.userRepository.update(id, dataToUpdate);
