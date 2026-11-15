@@ -28,6 +28,16 @@ export class OrderRepository {
   }
 
   /**
+   * Obtiene un pedido por su código único.
+   */
+  async getByCodigo(codigo) {
+    return await OrderModel.findOne({ codigo })
+      .populate('cliente', 'nombre email rol')
+      .select('-__v')
+      .lean();
+  }
+
+  /**
    * Inserta un único pedido.
    */
   async create(orderData) {
@@ -42,6 +52,19 @@ export class OrderRepository {
    */
   async createMany(ordersArray) {
     return await OrderModel.insertMany(ordersArray);
+  }
+
+  /**
+   * Actualiza un pedido por ID.
+   */
+  async update(id, updateData) {
+    return await OrderModel.findByIdAndUpdate(id, updateData, {
+      returnDocument: 'after',
+      runValidators: true,
+    })
+      .populate('cliente', 'nombre email rol')
+      .select('-__v')
+      .lean();
   }
 
   /**

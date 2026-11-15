@@ -47,6 +47,20 @@ export class DeliveryRepository {
   }
 
   /**
+   * Actualiza una entrega por ID.
+   */
+  async update(id, updateData) {
+    return await DeliveryModel.findByIdAndUpdate(id, updateData, {
+      returnDocument: 'after',
+      runValidators: true,
+    })
+      .populate('pedido')
+      .populate('repartidor', 'nombre email rol')
+      .select('-__v')
+      .lean();
+  }
+
+  /**
    * Elimina una entrega por ID.
    */
   async delete(id) {
