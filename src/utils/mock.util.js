@@ -14,7 +14,7 @@ import {
 /**
  * Genera un usuario simulado.
  */
-export const generateMockUser = (customRole = null) => {
+export const generateMockUser = (customRole = null, index = null) => {
   // Solo asignamos roles válidos de la constante
   const validRoles = [USER_ROLES.CLIENTE, USER_ROLES.REPARTIDOR];
   const rol = customRole || faker.helpers.arrayElement(validRoles);
@@ -22,9 +22,13 @@ export const generateMockUser = (customRole = null) => {
   const firstName = faker.person.firstName();
   const lastName = faker.person.lastName();
   const nombre = `${firstName} ${lastName}`;
-  const cleanFirst = firstName.toLowerCase().replace(/[^a-z]/g, '');
-  const cleanLast = lastName.toLowerCase().replace(/[^a-z]/g, '');
-  const email = `${cleanFirst}.${cleanLast}${faker.number.int({ min: 10, max: 999 })}@test.com`;
+  const cleanFirst = firstName.toLowerCase().replace(/[^a-z]/g, '') || 'usuario';
+  const cleanLast = lastName.toLowerCase().replace(/[^a-z]/g, '') || 'mock';
+  const uniqueSuffix =
+    index !== null
+      ? `${index}_${faker.string.alphanumeric({ length: 4, casing: 'lower' })}`
+      : `${faker.number.int({ min: 100, max: 99999 })}`;
+  const email = `${cleanFirst}.${cleanLast}.${uniqueSuffix}@test.com`;
 
   return {
     nombre,
@@ -42,7 +46,7 @@ export const generateMockUsers = (qty = 10) => {
   for (let i = 0; i < qty; i++) {
     // Alternamos para asegurar que haya tanto clientes como repartidores
     const role = i % 3 === 0 ? USER_ROLES.REPARTIDOR : USER_ROLES.CLIENTE;
-    users.push(generateMockUser(role));
+    users.push(generateMockUser(role, i + 1));
   }
   return users;
 };
@@ -50,11 +54,12 @@ export const generateMockUsers = (qty = 10) => {
 /**
  * Genera un pedido simulado asociado a un cliente.
  */
-export const generateMockOrder = (clienteId = null) => {
+export const generateMockOrder = (clienteId = null, index = null) => {
   const idCliente = clienteId || faker.database.mongodbObjectId();
+  const suffix = index !== null ? `${index}-${faker.string.alphanumeric({ length: 5, casing: 'upper' })}` : faker.string.alphanumeric({ length: 7, casing: 'upper' });
 
   return {
-    codigo: `PED-${faker.string.alphanumeric({ length: 6, casing: 'upper' })}`,
+    codigo: `PED-${suffix}`,
     cliente: idCliente,
     descripcion: `${faker.commerce.productAdjective()} ${faker.commerce.product()}`,
     total: Number(faker.commerce.price({ min: 1500, max: 50000, dec: 0 })),
@@ -71,7 +76,7 @@ export const generateMockOrders = (qty = 10, clienteIds = []) => {
   const orders = [];
   for (let i = 0; i < qty; i++) {
     const clienteId = clienteIds.length > 0 ? faker.helpers.arrayElement(clienteIds) : null;
-    orders.push(generateMockOrder(clienteId));
+    orders.push(generateMockOrder(clienteId, i + 1));
   }
   return orders;
 };
@@ -79,12 +84,13 @@ export const generateMockOrders = (qty = 10, clienteIds = []) => {
 /**
  * Genera una entrega simulada asociada a un pedido y a un repartidor.
  */
-export const generateMockDelivery = (pedidoId = null, repartidorId = null) => {
+export const generateMockDelivery = (pedidoId = null, repartidorId = null, index = null) => {
   const idPedido = pedidoId || faker.database.mongodbObjectId();
   const idRepartidor = repartidorId || faker.database.mongodbObjectId();
+  const suffix = index !== null ? `${index}-${faker.string.alphanumeric({ length: 5, casing: 'upper' })}` : faker.string.alphanumeric({ length: 7, casing: 'upper' });
 
   return {
-    codigoSeguimiento: `ENT-${faker.string.alphanumeric({ length: 6, casing: 'upper' })}`,
+    codigoSeguimiento: `ENT-${suffix}`,
     pedido: idPedido,
     repartidor: idRepartidor,
     estado: faker.helpers.arrayElement(Object.values(DELIVERY_STATUS)),
@@ -101,7 +107,7 @@ export const generateMockDeliveries = (qty = 10, pedidoIds = [], repartidorIds =
   for (let i = 0; i < qty; i++) {
     const pedidoId = pedidoIds.length > 0 ? faker.helpers.arrayElement(pedidoIds) : null;
     const repartidorId = repartidorIds.length > 0 ? faker.helpers.arrayElement(repartidorIds) : null;
-    deliveries.push(generateMockDelivery(pedidoId, repartidorId));
+    deliveries.push(generateMockDelivery(pedidoId, repartidorId, i + 1));
   }
   return deliveries;
 };

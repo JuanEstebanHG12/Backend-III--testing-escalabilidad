@@ -4,6 +4,7 @@ import { MockService } from '../services/mock.service.js';
  * Capa Controller de Mocks:
  * Única puerta de entrada HTTP para la generación y sembrado de mocks.
  * Extrae parámetros (query, body), llama al MockService y retorna los datos y códigos HTTP apropiados.
+ * NUNCA envía respuestas de error directamente; delega todo al middleware global mediante next(error).
  * NUNCA interactúa con Mongoose directamente.
  */
 export class MockController {
@@ -73,10 +74,10 @@ export class MockController {
    */
   seedData = async (req, res, next) => {
     try {
-      // Tomamos qty y collection tanto de query params como del body con fallback seguro
-      const body = req.body || {};
-      const qty = req.query.qty || body.qty || 10;
-      const collection = req.query.collection || body.collection || 'usuarios';
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      const qty = req.query.qty !== undefined ? req.query.qty : body.qty;
+      const collection =
+        req.query.collection !== undefined ? req.query.collection : body.collection;
 
       const result = await this.mockService.seedData({ qty, collection });
       return res.status(201).json(result);
