@@ -1,0 +1,21 @@
+export { ERROR_DICTIONARY } from './error.dictionary.js';
+export {
+  AppError,
+  CustomError,
+  UserNotFoundError,
+  OrderNotFoundError,
+  ProductNotFoundError,
+  DeliveryNotFoundError,
+  InvalidStateError,
+  InvalidPriorityError,
+  InvalidRoleError,
+  InvalidMockQuantityError,
+  NegativeValueError,
+  InvalidMockCollectionError,
+  MockSeedError,
+  DuplicateResourceError,
+  ValidationError,
+  InvalidIdError,
+  RouteNotFoundError,
+  DatabaseError,
+} from './custom.error.js';

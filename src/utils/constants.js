@@ -4,4 +4,5 @@ export {
   ORDER_PRIORITY,
   DELIVERY_STATUS,
   PRODUCT_STATUS,
+  ERROR_DICTIONARY,
 } from '../constants/index.js';
