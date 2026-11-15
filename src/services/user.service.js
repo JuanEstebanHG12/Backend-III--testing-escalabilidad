@@ -1,9 +1,18 @@
 import { UserRepository } from '../repositories/user.repository.js';
 import { USER_ROLES } from '../constants/index.js';
+import { isValidObjectId, isValidEmail } from '../utils/validators.util.js';
+import {
+  UserNotFoundError,
+  InvalidRoleError,
+  DuplicateResourceError,
+  ValidationError,
+  InvalidIdError,
+  ERROR_DICTIONARY,
+} from '../errors/index.js';
 
 /**
  * Capa Service de Usuarios:
- * Contiene la lógica de negocio para usuarios (validación de duplicados, asignación de roles mediante constantes).
+ * Contiene la lógica de negocio para usuarios y lanza errores personalizados del dominio.
  * Nunca importa Mongoose; toda persistencia pasa por UserRepository.
  */
 export class UserService {
@@ -19,51 +28,72 @@ export class UserService {
   }
 
   /**
-   * Obtiene un usuario por ID.
+   * Obtiene un usuario por ID validando el formato del identificador y su existencia.
    */
   async getUserById(id) {
+    if (!isValidObjectId(id)) {
+      throw new InvalidIdError(id, 'usuario');
+    }
+
     const user = await this.userRepository.getById(id);
     if (!user) {
-      const error = new Error(`No se encontró el usuario con ID: ${id}`);
-      error.statusCode = 404;
-      throw error;
+      throw new UserNotFoundError(id);
     }
     return user;
   }
 
   /**
-   * Registra un nuevo usuario validando unicidad de correo y asignando roles seguros.
+   * Registra un nuevo usuario validando campos obligatorios, formato de email,
+   * unicidad de correo y asignación de roles válidos mediante constantes.
    */
-  async createUser(userData) {
+  async createUser(userData = {}) {
+    if (!userData || typeof userData !== 'object') {
+      throw new ValidationError(
+        ERROR_DICTIONARY.MISSING_REQUIRED_FIELDS.message,
+        { required: ['nombre', 'email'] },
+        ERROR_DICTIONARY.MISSING_REQUIRED_FIELDS.code
+      );
+    }
+
     const name = (userData.nombre || userData.name || '').trim();
     const email = (userData.email || '').trim().toLowerCase();
-    const password = userData.password || 'password123';
-    const roleInput = userData.rol || userData.role;
+    const password =
+      userData.password !== undefined ? String(userData.password).trim() : 'password123';
+    const roleInput = userData.rol !== undefined ? userData.rol : userData.role;
 
     if (!name || !email || !password) {
-      const error = new Error('Los campos nombre, correo y contraseña son obligatorios');
-      error.statusCode = 400;
-      throw error;
+      throw new ValidationError(
+        'Los campos nombre, correo y contraseña son obligatorios',
+        { required: ['nombre', 'email', 'password'] },
+        ERROR_DICTIONARY.MISSING_REQUIRED_FIELDS.code
+      );
+    }
+
+    if (!isValidEmail(email)) {
+      throw new ValidationError(`El correo electrónico '${email}' no tiene un formato válido`, {
+        field: 'email',
+        value: email,
+      });
+    }
+
+    // Regla de negocio: validar el rol usando constantes antes de consultar/insertar
+    let assignedRole = USER_ROLES.CLIENTE;
+    if (roleInput !== undefined && roleInput !== null && roleInput !== '') {
+      const validRoles = Object.values(USER_ROLES);
+      if (!validRoles.includes(roleInput)) {
+        throw new InvalidRoleError(roleInput, validRoles);
+      }
+      assignedRole = roleInput;
     }
 
     // Regla de negocio: no permitir emails duplicados
     const existingUser = await this.userRepository.getByEmail(email);
     if (existingUser) {
-      const error = new Error(`El correo ${email} ya se encuentra registrado`);
-      error.statusCode = 400;
-      throw error;
-    }
-
-    // Regla de negocio: validar el rol usando constantes
-    let assignedRole = USER_ROLES.CLIENTE;
-    if (roleInput) {
-      const validRoles = Object.values(USER_ROLES);
-      if (!validRoles.includes(roleInput)) {
-        const error = new Error(`Rol inválido: ${roleInput}. Roles permitidos: ${validRoles.join(', ')}`);
-        error.statusCode = 400;
-        throw error;
-      }
-      assignedRole = roleInput;
+      throw new DuplicateResourceError(
+        `El correo ${email} ya se encuentra registrado`,
+        { field: 'email', value: email },
+        ERROR_DICTIONARY.USER_ALREADY_EXISTS.code
+      );
     }
 
     const newUser = {
@@ -77,47 +107,67 @@ export class UserService {
   }
 
   /**
-   * Actualiza los datos de un usuario.
+   * Actualiza los datos de un usuario existente.
    */
-  async updateUser(id, updateData) {
+  async updateUser(id, updateData = {}) {
     await this.getUserById(id);
+
+    if (!updateData || typeof updateData !== 'object' || Object.keys(updateData).length === 0) {
+      throw new ValidationError('Debe proporcionar al menos un campo para actualizar el usuario');
+    }
 
     const dataToUpdate = { ...updateData };
 
-    if (dataToUpdate.email) {
-      dataToUpdate.email = dataToUpdate.email.trim().toLowerCase();
+    if (dataToUpdate.email !== undefined) {
+      dataToUpdate.email = String(dataToUpdate.email).trim().toLowerCase();
+      if (!isValidEmail(dataToUpdate.email)) {
+        throw new ValidationError(
+          `El correo electrónico '${dataToUpdate.email}' no tiene un formato válido`,
+          { field: 'email', value: dataToUpdate.email }
+        );
+      }
+
       const existingUser = await this.userRepository.getByEmail(dataToUpdate.email);
       if (existingUser && existingUser._id.toString() !== id) {
-        const error = new Error('El correo electrónico ya está en uso por otro usuario');
-        error.statusCode = 400;
-        throw error;
+        throw new DuplicateResourceError(
+          'El correo electrónico ya está en uso por otro usuario',
+          { field: 'email', value: dataToUpdate.email },
+          ERROR_DICTIONARY.USER_ALREADY_EXISTS.code
+        );
       }
     }
 
-    if (dataToUpdate.nombre) {
-      dataToUpdate.nombre = dataToUpdate.nombre.trim();
+    if (dataToUpdate.nombre !== undefined) {
+      dataToUpdate.nombre = String(dataToUpdate.nombre).trim();
+      if (!dataToUpdate.nombre) {
+        throw new ValidationError('El nombre del usuario no puede estar vacío', { field: 'nombre' });
+      }
     }
 
-    if (dataToUpdate.name) {
-      dataToUpdate.nombre = dataToUpdate.name.trim();
+    if (dataToUpdate.name !== undefined) {
+      dataToUpdate.nombre = String(dataToUpdate.name).trim();
+      delete dataToUpdate.name;
+      if (!dataToUpdate.nombre) {
+        throw new ValidationError('El nombre del usuario no puede estar vacío', { field: 'nombre' });
+      }
     }
 
-    const roleToUpdate = dataToUpdate.rol || dataToUpdate.role;
-    if (roleToUpdate) {
+    const roleToUpdate =
+      dataToUpdate.rol !== undefined ? dataToUpdate.rol : dataToUpdate.role;
+    if (roleToUpdate !== undefined) {
       const validRoles = Object.values(USER_ROLES);
       if (!validRoles.includes(roleToUpdate)) {
-        const error = new Error(`Rol inválido: ${roleToUpdate}. Roles permitidos: ${validRoles.join(', ')}`);
-        error.statusCode = 400;
-        throw error;
+        throw new InvalidRoleError(roleToUpdate, validRoles);
       }
       dataToUpdate.rol = roleToUpdate;
+      delete dataToUpdate.role;
     }
 
     return await this.userRepository.update(id, dataToUpdate);
   }
 
   /**
-   * Elimina un usuario por su ID.
+   * Elimina un usuario por su ID tras verificar su existencia.
    */
   async deleteUser(id) {
     await this.getUserById(id);
