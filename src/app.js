@@ -1,5 +1,9 @@
 import express from 'express';
 import apiRouter from './routes/index.js';
+import {
+  notFoundMiddleware,
+  errorMiddleware,
+} from './middlewares/error.middleware.js';
 
 const app = express();
 
@@ -18,23 +22,10 @@ app.get('/', (req, res) => {
 // Enrutador principal de la API
 app.use('/api', apiRouter);
 
-// Middleware para manejo de rutas no encontradas (404)
-app.use((req, res, next) => {
-  res.status(404).json({
-    success: false,
-    message: `Ruta no encontrada: ${req.method} ${req.originalUrl}`,
-  });
-});
+// Middleware para rutas no encontradas (delega RouteNotFoundError al middleware global)
+app.use(notFoundMiddleware);
 
-// Middleware centralizado de manejo de errores
-app.use((err, req, res, next) => {
-  console.error('Error capturado:', err.message);
-
-  const statusCode = err.statusCode || 500;
-  return res.status(statusCode).json({
-    success: false,
-    message: err.message || 'Error interno del servidor',
-  });
-});
+// Middleware global centralizado de manejo de errores (única salida de errores HTTP)
+app.use(errorMiddleware);
 
 export default app;
