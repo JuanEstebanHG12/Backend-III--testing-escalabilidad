@@ -18,4 +18,11 @@ export {
   InvalidIdError,
   RouteNotFoundError,
   DatabaseError,
+  FileRequiredError,
+  InvalidFileTypeError,
+  FileSizeExceededError,
+  InvalidFileFieldError,
+  InvalidDocumentTypeError,
+  EntityNotFoundError,
+  FileSaveError,
 } from './custom.error.js';

@@ -86,6 +86,43 @@ export const ERROR_DICTIONARY = Object.freeze({
     message: 'Ocurrió un fallo controlado durante la carga o limpieza de datos de prueba en MongoDB',
   }),
 
+  // Errores del Módulo de Carga de Archivos (Multer / Uploads)
+  FILE_REQUIRED: Object.freeze({
+    code: 'FILE_REQUIRED',
+    statusCode: 400,
+    message: 'Debe adjuntar un archivo válido en la solicitud (multipart/form-data)',
+  }),
+  INVALID_FILE_TYPE: Object.freeze({
+    code: 'INVALID_FILE_TYPE',
+    statusCode: 400,
+    message: 'El tipo o formato del archivo no está permitido. Formatos aceptados: PDF, JPG, JPEG, PNG, WEBP',
+  }),
+  FILE_SIZE_EXCEEDED: Object.freeze({
+    code: 'FILE_SIZE_EXCEEDED',
+    statusCode: 400,
+    message: 'El archivo supera el tamaño máximo permitido de 5 MB',
+  }),
+  INVALID_FILE_FIELD: Object.freeze({
+    code: 'INVALID_FILE_FIELD',
+    statusCode: 400,
+    message: 'El nombre del campo de archivo enviado no coincide con el esperado por el endpoint',
+  }),
+  INVALID_DOCUMENT_TYPE: Object.freeze({
+    code: 'INVALID_DOCUMENT_TYPE',
+    statusCode: 400,
+    message: 'El tipo de documento o comprobante especificado no es válido',
+  }),
+  ENTITY_NOT_FOUND: Object.freeze({
+    code: 'ENTITY_NOT_FOUND',
+    statusCode: 404,
+    message: 'La entidad asociada al documento o comprobante no fue encontrada',
+  }),
+  FILE_SAVE_ERROR: Object.freeze({
+    code: 'FILE_SAVE_ERROR',
+    statusCode: 500,
+    message: 'Ocurrió un error al almacenar el archivo o registrar sus metadatos',
+  }),
+
   // Errores Generales de Validación, Rutas e Infraestructura
   VALIDATION_ERROR: Object.freeze({
     code: 'VALIDATION_ERROR',

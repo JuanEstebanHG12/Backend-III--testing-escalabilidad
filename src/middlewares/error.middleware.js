@@ -2,17 +2,38 @@ import {
   AppError,
   ERROR_DICTIONARY,
   RouteNotFoundError,
+  FileSizeExceededError,
+  InvalidFileFieldError,
+  FileSaveError,
 } from '../errors/index.js';
+import { MAX_FILE_SIZE_BYTES } from '../constants/index.js';
 import { logger } from '../config/logger.config.js';
 
 /**
- * Normaliza cualquier error (de dominio, de Mongoose/MongoDB, de sintaxis JSON o inesperado)
+ * Normaliza cualquier error (de dominio, de Multer, de Mongoose/MongoDB, de sintaxis JSON o inesperado)
  * a una instancia uniforme de AppError basada en el ERROR_DICTIONARY.
  */
 const normalizeError = (err) => {
   // 1. Si ya es un error operacional de nuestro dominio (AppError), lo conservamos
   if (err instanceof AppError) {
     return err;
+  }
+
+  // 1.b Errores nativos de Multer (MulterError)
+  if (err.name === 'MulterError') {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return new FileSizeExceededError(MAX_FILE_SIZE_BYTES, null, {
+        field: err.field || null,
+        maxSizeBytes: MAX_FILE_SIZE_BYTES,
+      });
+    }
+    if (err.code === 'LIMIT_UNEXPECTED_FILE' || err.code === 'LIMIT_FILE_COUNT') {
+      return new InvalidFileFieldError(err.field || null, ['file', 'document', 'receipt']);
+    }
+    return new FileSaveError(`Error al procesar la carga del archivo: ${err.message}`, {
+      multerCode: err.code,
+      field: err.field || null,
+    });
   }
 
   // 2. Error de formato de ObjectId en Mongoose (CastError)

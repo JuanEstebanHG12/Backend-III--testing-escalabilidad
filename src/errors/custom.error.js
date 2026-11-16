@@ -309,3 +309,120 @@ export class DatabaseError extends AppError {
     });
   }
 }
+
+/**
+ * Error de carga de archivos: Archivo requerido no enviado (400)
+ */
+export class FileRequiredError extends AppError {
+  constructor(expectedField = 'file', customMessage = null) {
+    super({
+      message:
+        customMessage ||
+        `No se recibió ningún archivo. Debe adjuntar un archivo en el campo '${expectedField}'`,
+      code: ERROR_DICTIONARY.FILE_REQUIRED.code,
+      statusCode: ERROR_DICTIONARY.FILE_REQUIRED.statusCode,
+      details: { expectedField },
+    });
+  }
+}
+
+/**
+ * Error de carga de archivos: Tipo MIME o extensión no permitidos (400)
+ */
+export class InvalidFileTypeError extends AppError {
+  constructor(receivedMimeType = null, allowedMimeTypes = [], customMessage = null, details = null) {
+    const allowedText =
+      allowedMimeTypes.length > 0 ? `. Tipos permitidos: ${allowedMimeTypes.join(', ')}` : '';
+    super({
+      message:
+        customMessage ||
+        `Tipo de archivo no permitido${receivedMimeType ? ` ('${receivedMimeType}')` : ''}${allowedText}`,
+      code: ERROR_DICTIONARY.INVALID_FILE_TYPE.code,
+      statusCode: ERROR_DICTIONARY.INVALID_FILE_TYPE.statusCode,
+      details: details || { receivedMimeType, allowedMimeTypes },
+    });
+  }
+}
+
+/**
+ * Error de carga de archivos: Tamaño máximo superado (400)
+ */
+export class FileSizeExceededError extends AppError {
+  constructor(maxSizeBytes = 5 * 1024 * 1024, customMessage = null, details = null) {
+    const maxMb = Number((maxSizeBytes / (1024 * 1024)).toFixed(2));
+    super({
+      message:
+        customMessage ||
+        `El archivo supera el tamaño máximo permitido (${maxMb} MB)`,
+      code: ERROR_DICTIONARY.FILE_SIZE_EXCEEDED.code,
+      statusCode: ERROR_DICTIONARY.FILE_SIZE_EXCEEDED.statusCode,
+      details: details || { maxSizeBytes, maxSizeMB: maxMb },
+    });
+  }
+}
+
+/**
+ * Error de carga de archivos: Nombre de campo inesperado en multipart/form-data (400)
+ */
+export class InvalidFileFieldError extends AppError {
+  constructor(receivedField = null, expectedFields = [], customMessage = null) {
+    const expectedText =
+      expectedFields.length > 0 ? `. Campos permitidos: ${expectedFields.join(', ')}` : '';
+    super({
+      message:
+        customMessage ||
+        `Campo de archivo inesperado${receivedField ? `: '${receivedField}'` : ''}${expectedText}`,
+      code: ERROR_DICTIONARY.INVALID_FILE_FIELD.code,
+      statusCode: ERROR_DICTIONARY.INVALID_FILE_FIELD.statusCode,
+      details: { receivedField, expectedFields },
+    });
+  }
+}
+
+/**
+ * Error de carga de archivos: Tipo de documento o comprobante inválido (400)
+ */
+export class InvalidDocumentTypeError extends AppError {
+  constructor(receivedType = null, allowedTypes = [], customMessage = null) {
+    const allowedText =
+      allowedTypes.length > 0 ? `. Tipos de documento permitidos: ${allowedTypes.join(', ')}` : '';
+    super({
+      message:
+        customMessage ||
+        `Tipo de documento inválido: '${receivedType ?? ''}'${allowedText}`,
+      code: ERROR_DICTIONARY.INVALID_DOCUMENT_TYPE.code,
+      statusCode: ERROR_DICTIONARY.INVALID_DOCUMENT_TYPE.statusCode,
+      details: { receivedType, allowedTypes },
+    });
+  }
+}
+
+/**
+ * Error de carga de archivos: Entidad asociada no encontrada (404)
+ */
+export class EntityNotFoundError extends AppError {
+  constructor(entity = 'entidad', identifier = null, customMessage = null) {
+    super({
+      message:
+        customMessage ||
+        `No se encontró la ${entity} con identificador: ${identifier}`,
+      code: ERROR_DICTIONARY.ENTITY_NOT_FOUND.code,
+      statusCode: ERROR_DICTIONARY.ENTITY_NOT_FOUND.statusCode,
+      details: { entity, id: identifier },
+    });
+  }
+}
+
+/**
+ * Error de carga de archivos: Error al guardar el archivo o registrar metadatos (500)
+ */
+export class FileSaveError extends AppError {
+  constructor(customMessage = null, details = null) {
+    super({
+      message: customMessage || ERROR_DICTIONARY.FILE_SAVE_ERROR.message,
+      code: ERROR_DICTIONARY.FILE_SAVE_ERROR.code,
+      statusCode: ERROR_DICTIONARY.FILE_SAVE_ERROR.statusCode,
+      details,
+    });
+  }
+}
