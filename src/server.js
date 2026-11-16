@@ -15,6 +15,7 @@ const startServer = async () => {
 
     app.listen(config.PORT, () => {
       logger.info(`Servidor ShipNow escuchando en el puerto ${config.PORT} (entorno: ${config.NODE_ENV})`);
+      logger.info(`Documentación interactiva Swagger UI disponible en http://localhost:${config.PORT}/api/docs`);
       logger.debug(`Endpoints disponibles en http://localhost:${config.PORT}/api`);
     });
   } catch (error) {
