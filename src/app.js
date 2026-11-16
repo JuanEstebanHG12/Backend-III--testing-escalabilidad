@@ -1,5 +1,7 @@
 import express from 'express';
 import apiRouter from './routes/index.js';
+import loggerRoutes from './routes/logger.routes.js';
+import { requestLoggerMiddleware } from './middlewares/logger.middleware.js';
 import {
   notFoundMiddleware,
   errorMiddleware,
@@ -11,6 +13,9 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Middleware global para registrar peticiones HTTP con Winston
+app.use(requestLoggerMiddleware);
+
 // Endpoint de bienvenida / verificación de estado
 app.get('/', (req, res) => {
   res.status(200).json({
@@ -18,6 +23,9 @@ app.get('/', (req, res) => {
     message: 'API de ShipNow activa y funcionando',
   });
 });
+
+// Endpoint de prueba del logger en raíz (/loggerTest) además de /api/loggerTest
+app.use('/loggerTest', loggerRoutes);
 
 // Enrutador principal de la API
 app.use('/api', apiRouter);
