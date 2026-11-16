@@ -76,6 +76,22 @@ export class UserRepository {
   }
 
   /**
+   * Registra los metadatos de un documento subido en el arreglo 'documents' del usuario.
+   */
+  async addDocument(id, documentMetadata) {
+    return await UserModel.findByIdAndUpdate(
+      id,
+      { $push: { documents: documentMetadata } },
+      {
+        returnDocument: 'after',
+        runValidators: true,
+      }
+    )
+      .select('-password -__v')
+      .lean();
+  }
+
+  /**
    * Elimina un usuario por su ID.
    */
   async delete(id) {

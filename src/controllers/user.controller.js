@@ -90,4 +90,33 @@ export class UserController {
       next(error);
     }
   };
+
+  /**
+   * POST /api/users/:id/documents
+   */
+  uploadDocument = async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const documentType =
+        req.body?.documentType ??
+        req.body?.tipoDocumento ??
+        req.query?.documentType ??
+        req.query?.tipoDocumento;
+
+      const result = await this.userService.uploadUserDocument(
+        id,
+        req.file,
+        documentType
+      );
+
+      return res.status(201).json({
+        success: true,
+        message: 'Documento de usuario subido y registrado exitosamente',
+        data: result.user,
+        document: result.document,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

@@ -1,6 +1,16 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { UserRepository } from '../repositories/user.repository.js';
-import { USER_ROLES } from '../constants/index.js';
+import {
+  USER_ROLES,
+  USER_DOCUMENT_TYPES,
+  UPLOAD_SUBFOLDERS,
+} from '../constants/index.js';
 import { logger } from '../config/logger.config.js';
+import {
+  UPLOADS_ROOT_DIR,
+  removeUploadedFileSafely,
+} from '../config/multer.config.js';
 import { isValidObjectId, isValidEmail } from '../utils/validators.util.js';
 import {
   UserNotFoundError,
@@ -8,6 +18,9 @@ import {
   DuplicateResourceError,
   ValidationError,
   InvalidIdError,
+  FileRequiredError,
+  InvalidDocumentTypeError,
+  FileSaveError,
   ERROR_DICTIONARY,
 } from '../errors/index.js';
 
@@ -178,5 +191,111 @@ export class UserService {
     const deleted = await this.userRepository.delete(id);
     logger.info(`Usuario con ID ${id} eliminado correctamente`);
     return deleted;
+  }
+
+  /**
+   * Asocia un documento o licencia a un usuario existente:
+   * - Verifica que el usuario exista (si no existe, limpia el archivo físico temporal y lanza UserNotFoundError).
+   * - Valida que el archivo haya sido adjuntado.
+   * - Valida que el tipo de documento sea válido según USER_DOCUMENT_TYPES.
+   * - Si es de tipo 'licencia' y quedó en 'documents', lo reubica en 'uploads/licenses'.
+   * - Registra únicamente los metadatos en la entidad usuario y deja trazabilidad en Winston.
+   */
+  async uploadUserDocument(userId, file, rawDocumentType) {
+    try {
+      if (!isValidObjectId(userId)) {
+        removeUploadedFileSafely(file);
+        throw new InvalidIdError(userId, 'usuario');
+      }
+
+      const existingUser = await this.userRepository.getById(userId);
+      if (!existingUser) {
+        removeUploadedFileSafely(file);
+        logger.warning(
+          `Intento de subir documento para usuario inexistente (ID: ${userId})`
+        );
+        throw new UserNotFoundError(userId);
+      }
+
+      if (!file) {
+        logger.warning(
+          `Error al subir documento para el usuario ${userId}: no se adjuntó ningún archivo`
+        );
+        throw new FileRequiredError('file');
+      }
+
+      const normalizedDocType = String(rawDocumentType || '')
+        .trim()
+        .toLowerCase();
+      const allowedDocTypes = Object.values(USER_DOCUMENT_TYPES);
+
+      if (!normalizedDocType || !allowedDocTypes.includes(normalizedDocType)) {
+        removeUploadedFileSafely(file);
+        logger.warning(
+          `Intento de subir documento con tipo de documento inválido ('${rawDocumentType ?? ''}') para el usuario ${userId}`
+        );
+        throw new InvalidDocumentTypeError(rawDocumentType, allowedDocTypes);
+      }
+
+      // Aseguramos que las licencias queden en uploads/licenses y el resto en uploads/documents
+      const targetSubfolder =
+        normalizedDocType === USER_DOCUMENT_TYPES.LICENCIA
+          ? UPLOAD_SUBFOLDERS.LICENSES
+          : UPLOAD_SUBFOLDERS.DOCUMENTS;
+
+      const targetDir = path.join(UPLOADS_ROOT_DIR, targetSubfolder);
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+
+      let finalAbsolutePath = file.path;
+      const expectedPath = path.join(targetDir, file.filename);
+      if (file.path && path.resolve(file.path) !== path.resolve(expectedPath)) {
+        fs.renameSync(file.path, expectedPath);
+        finalAbsolutePath = expectedPath;
+      }
+
+      const relativeFilePath = path
+        .relative(process.cwd(), finalAbsolutePath)
+        .split(path.sep)
+        .join('/');
+
+      const documentMetadata = {
+        originalName: file.originalname,
+        generatedName: file.filename,
+        path: relativeFilePath,
+        mimeType: file.mimetype,
+        size: file.size,
+        documentType: normalizedDocType,
+        uploadedAt: new Date(),
+      };
+
+      const updatedUser = await this.userRepository.addDocument(userId, documentMetadata);
+
+      logger.info(
+        `Carga exitosa de documento '${normalizedDocType}' ('${file.originalname}' -> '${file.filename}') asociado al usuario ${userId}`
+      );
+
+      return {
+        user: updatedUser,
+        document: documentMetadata,
+      };
+    } catch (error) {
+      if (
+        !(error instanceof UserNotFoundError) &&
+        !(error instanceof InvalidIdError) &&
+        !(error instanceof FileRequiredError) &&
+        !(error instanceof InvalidDocumentTypeError)
+      ) {
+        removeUploadedFileSafely(file);
+        logger.error(
+          `Error al guardar documento para el usuario ${userId}: ${error.message}`
+        );
+        throw new FileSaveError(
+          `Error al guardar el documento del usuario: ${error.message}`
+        );
+      }
+      throw error;
+    }
   }
 }
