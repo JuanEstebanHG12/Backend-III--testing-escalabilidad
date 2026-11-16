@@ -11,3 +11,16 @@ logs/*.json
 logs/*.gz
 logs/*.txt
 !logs/.gitkeep
+
+# Archivos subidos mediante Multer (documentos, licencias y comprobantes)
+uploads/*
+uploads/documents/*
+uploads/licenses/*
+uploads/receipts/*
+!uploads/.gitkeep
+!uploads/documents/
+!uploads/licenses/
+!uploads/receipts/
+!uploads/documents/.gitkeep
+!uploads/licenses/.gitkeep
+!uploads/receipts/.gitkeep
