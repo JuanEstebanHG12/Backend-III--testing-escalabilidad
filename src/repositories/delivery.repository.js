@@ -61,6 +61,24 @@ export class DeliveryRepository {
   }
 
   /**
+   * Registra los metadatos de un comprobante subido en el arreglo 'comprobantes' de la entrega.
+   */
+  async addReceipt(id, receiptMetadata) {
+    return await DeliveryModel.findByIdAndUpdate(
+      id,
+      { $push: { comprobantes: receiptMetadata } },
+      {
+        returnDocument: 'after',
+        runValidators: true,
+      }
+    )
+      .populate('pedido')
+      .populate('repartidor', 'nombre email rol')
+      .select('-__v')
+      .lean();
+  }
+
+  /**
    * Elimina una entrega por ID.
    */
   async delete(id) {

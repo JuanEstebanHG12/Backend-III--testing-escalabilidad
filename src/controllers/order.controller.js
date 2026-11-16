@@ -108,4 +108,33 @@ export class OrderController {
       next(error);
     }
   };
+
+  /**
+   * POST /api/orders/:id/receipt
+   */
+  uploadReceipt = async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const documentType =
+        req.body?.documentType ??
+        req.body?.tipoDocumento ??
+        req.query?.documentType ??
+        req.query?.tipoDocumento;
+
+      const result = await this.orderService.uploadOrderReceipt(
+        id,
+        req.file,
+        documentType
+      );
+
+      return res.status(201).json({
+        success: true,
+        message: 'Comprobante de pedido subido y asociado exitosamente',
+        data: result.order,
+        receipt: result.receipt,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

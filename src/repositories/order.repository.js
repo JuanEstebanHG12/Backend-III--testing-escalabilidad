@@ -68,6 +68,23 @@ export class OrderRepository {
   }
 
   /**
+   * Registra los metadatos de un comprobante subido en el arreglo 'comprobantes' del pedido.
+   */
+  async addReceipt(id, receiptMetadata) {
+    return await OrderModel.findByIdAndUpdate(
+      id,
+      { $push: { comprobantes: receiptMetadata } },
+      {
+        returnDocument: 'after',
+        runValidators: true,
+      }
+    )
+      .populate('cliente', 'nombre email rol')
+      .select('-__v')
+      .lean();
+  }
+
+  /**
    * Elimina un pedido por ID.
    */
   async delete(id) {

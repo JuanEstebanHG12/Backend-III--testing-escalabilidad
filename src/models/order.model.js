@@ -1,5 +1,48 @@
 import mongoose from 'mongoose';
-import { ORDER_STATUS, ORDER_PRIORITY } from '../constants/index.js';
+import { ORDER_STATUS, ORDER_PRIORITY, RECEIPT_TYPES } from '../constants/index.js';
+
+const orderReceiptMetadataSchema = new mongoose.Schema(
+  {
+    originalName: {
+      type: String,
+      required: [true, 'El nombre original del comprobante es obligatorio'],
+      trim: true,
+    },
+    generatedName: {
+      type: String,
+      required: [true, 'El nombre generado del comprobante es obligatorio'],
+      trim: true,
+    },
+    path: {
+      type: String,
+      required: [true, 'La ruta del comprobante es obligatoria'],
+      trim: true,
+    },
+    mimeType: {
+      type: String,
+      required: [true, 'El tipo MIME del comprobante es obligatorio'],
+      trim: true,
+    },
+    size: {
+      type: Number,
+      required: [true, 'El tamaño del comprobante es obligatorio'],
+      min: [0, 'El tamaño del comprobante no puede ser negativo'],
+    },
+    documentType: {
+      type: String,
+      enum: {
+        values: Object.values(RECEIPT_TYPES),
+        message: 'Tipo de comprobante no válido: {VALUE}',
+      },
+      default: RECEIPT_TYPES.COMPROBANTE_PAGO,
+    },
+    uploadedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false }
+);
 
 const orderItemSchema = new mongoose.Schema(
   {
@@ -71,6 +114,10 @@ const orderSchema = new mongoose.Schema(
         message: 'Prioridad no válida: {VALUE}',
       },
       default: ORDER_PRIORITY.MEDIA,
+    },
+    comprobantes: {
+      type: [orderReceiptMetadataSchema],
+      default: [],
     },
   },
   {

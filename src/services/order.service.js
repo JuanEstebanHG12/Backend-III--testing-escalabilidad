@@ -1,7 +1,13 @@
+import path from 'node:path';
 import { OrderRepository } from '../repositories/order.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
-import { ORDER_STATUS, ORDER_PRIORITY } from '../constants/index.js';
+import {
+  ORDER_STATUS,
+  ORDER_PRIORITY,
+  RECEIPT_TYPES,
+} from '../constants/index.js';
 import { logger } from '../config/logger.config.js';
+import { removeUploadedFileSafely } from '../config/multer.config.js';
 import { isValidObjectId } from '../utils/validators.util.js';
 import {
   OrderNotFoundError,
@@ -12,6 +18,9 @@ import {
   DuplicateResourceError,
   ValidationError,
   InvalidIdError,
+  FileRequiredError,
+  InvalidDocumentTypeError,
+  FileSaveError,
   ERROR_DICTIONARY,
 } from '../errors/index.js';
 
@@ -262,5 +271,101 @@ export class OrderService {
     const deleted = await this.orderRepository.delete(id);
     logger.info(`Pedido con ID ${id} eliminado correctamente`);
     return deleted;
+  }
+
+  /**
+   * Asocia un comprobante a un pedido existente:
+   * - Verifica que el pedido exista (si no existe, limpia el archivo físico temporal y lanza OrderNotFoundError).
+   * - Valida que el archivo haya sido adjuntado.
+   * - Si se envía tipo de documento/comprobante, valida que pertenezca a RECEIPT_TYPES (por defecto 'comprobante_pago').
+   * - Registra los metadatos en la entidad pedido y deja trazabilidad en Winston.
+   */
+  async uploadOrderReceipt(orderId, file, rawDocumentType = null) {
+    try {
+      if (!isValidObjectId(orderId)) {
+        removeUploadedFileSafely(file);
+        throw new InvalidIdError(orderId, 'pedido');
+      }
+
+      const existingOrder = await this.orderRepository.getById(orderId);
+      if (!existingOrder) {
+        removeUploadedFileSafely(file);
+        logger.warning(
+          `Intento de asociar comprobante a pedido inexistente (ID: ${orderId})`
+        );
+        throw new OrderNotFoundError(orderId);
+      }
+
+      if (!file) {
+        logger.warning(
+          `Error al subir comprobante para el pedido ${orderId}: no se adjuntó ningún archivo`
+        );
+        throw new FileRequiredError('file');
+      }
+
+      const allowedReceiptTypes = Object.values(RECEIPT_TYPES);
+      let resolvedReceiptType = RECEIPT_TYPES.COMPROBANTE_PAGO;
+
+      if (
+        rawDocumentType !== undefined &&
+        rawDocumentType !== null &&
+        String(rawDocumentType).trim() !== ''
+      ) {
+        const candidate = String(rawDocumentType).trim().toLowerCase();
+        if (!allowedReceiptTypes.includes(candidate)) {
+          removeUploadedFileSafely(file);
+          logger.warning(
+            `Intento de subir comprobante con tipo inválido ('${rawDocumentType}') para el pedido ${orderId}`
+          );
+          throw new InvalidDocumentTypeError(rawDocumentType, allowedReceiptTypes);
+        }
+        resolvedReceiptType = candidate;
+      }
+
+      const relativeFilePath = path
+        .relative(process.cwd(), file.path)
+        .split(path.sep)
+        .join('/');
+
+      const receiptMetadata = {
+        originalName: file.originalname,
+        generatedName: file.filename,
+        path: relativeFilePath,
+        mimeType: file.mimetype,
+        size: file.size,
+        documentType: resolvedReceiptType,
+        uploadedAt: new Date(),
+      };
+
+      const updatedOrder = await this.orderRepository.addReceipt(
+        orderId,
+        receiptMetadata
+      );
+
+      logger.info(
+        `Comprobante '${resolvedReceiptType}' ('${file.originalname}' -> '${file.filename}') asociado exitosamente al pedido #${updatedOrder?.codigo || orderId}`
+      );
+
+      return {
+        order: updatedOrder,
+        receipt: receiptMetadata,
+      };
+    } catch (error) {
+      if (
+        !(error instanceof OrderNotFoundError) &&
+        !(error instanceof InvalidIdError) &&
+        !(error instanceof FileRequiredError) &&
+        !(error instanceof InvalidDocumentTypeError)
+      ) {
+        removeUploadedFileSafely(file);
+        logger.error(
+          `Error al guardar comprobante para el pedido ${orderId}: ${error.message}`
+        );
+        throw new FileSaveError(
+          `Error al guardar el comprobante del pedido: ${error.message}`
+        );
+      }
+      throw error;
+    }
   }
 }

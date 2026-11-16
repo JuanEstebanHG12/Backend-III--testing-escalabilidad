@@ -89,4 +89,33 @@ export class DeliveryController {
       next(error);
     }
   };
+
+  /**
+   * POST /api/deliveries/:id/receipt
+   */
+  uploadReceipt = async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const documentType =
+        req.body?.documentType ??
+        req.body?.tipoDocumento ??
+        req.query?.documentType ??
+        req.query?.tipoDocumento;
+
+      const result = await this.deliveryService.uploadDeliveryReceipt(
+        id,
+        req.file,
+        documentType
+      );
+
+      return res.status(201).json({
+        success: true,
+        message: 'Comprobante de entrega subido y asociado exitosamente',
+        data: result.delivery,
+        receipt: result.receipt,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

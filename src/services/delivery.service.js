@@ -1,8 +1,14 @@
+import path from 'node:path';
 import { DeliveryRepository } from '../repositories/delivery.repository.js';
 import { OrderRepository } from '../repositories/order.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
-import { DELIVERY_STATUS, USER_ROLES } from '../constants/index.js';
+import {
+  DELIVERY_STATUS,
+  USER_ROLES,
+  RECEIPT_TYPES,
+} from '../constants/index.js';
 import { logger } from '../config/logger.config.js';
+import { removeUploadedFileSafely } from '../config/multer.config.js';
 import { isValidObjectId } from '../utils/validators.util.js';
 import {
   DeliveryNotFoundError,
@@ -12,6 +18,9 @@ import {
   InvalidRoleError,
   ValidationError,
   InvalidIdError,
+  FileRequiredError,
+  InvalidDocumentTypeError,
+  FileSaveError,
   ERROR_DICTIONARY,
 } from '../errors/index.js';
 
@@ -208,5 +217,101 @@ export class DeliveryService {
     const deleted = await this.deliveryRepository.delete(id);
     logger.info(`Entrega con ID ${id} eliminada correctamente`);
     return deleted;
+  }
+
+  /**
+   * Asocia un comprobante a una entrega logística existente:
+   * - Verifica que la entrega exista (si no existe, limpia el archivo físico temporal y lanza DeliveryNotFoundError).
+   * - Valida que el archivo haya sido adjuntado.
+   * - Si se envía tipo de documento/comprobante, valida que pertenezca a RECEIPT_TYPES (por defecto 'comprobante_entrega').
+   * - Registra los metadatos en la entidad entrega y deja trazabilidad en Winston.
+   */
+  async uploadDeliveryReceipt(deliveryId, file, rawDocumentType = null) {
+    try {
+      if (!isValidObjectId(deliveryId)) {
+        removeUploadedFileSafely(file);
+        throw new InvalidIdError(deliveryId, 'entrega');
+      }
+
+      const existingDelivery = await this.deliveryRepository.getById(deliveryId);
+      if (!existingDelivery) {
+        removeUploadedFileSafely(file);
+        logger.warning(
+          `Intento de asociar comprobante a entrega inexistente (ID: ${deliveryId})`
+        );
+        throw new DeliveryNotFoundError(deliveryId);
+      }
+
+      if (!file) {
+        logger.warning(
+          `Error al subir comprobante para la entrega ${deliveryId}: no se adjuntó ningún archivo`
+        );
+        throw new FileRequiredError('file');
+      }
+
+      const allowedReceiptTypes = Object.values(RECEIPT_TYPES);
+      let resolvedReceiptType = RECEIPT_TYPES.COMPROBANTE_ENTREGA;
+
+      if (
+        rawDocumentType !== undefined &&
+        rawDocumentType !== null &&
+        String(rawDocumentType).trim() !== ''
+      ) {
+        const candidate = String(rawDocumentType).trim().toLowerCase();
+        if (!allowedReceiptTypes.includes(candidate)) {
+          removeUploadedFileSafely(file);
+          logger.warning(
+            `Intento de subir comprobante con tipo inválido ('${rawDocumentType}') para la entrega ${deliveryId}`
+          );
+          throw new InvalidDocumentTypeError(rawDocumentType, allowedReceiptTypes);
+        }
+        resolvedReceiptType = candidate;
+      }
+
+      const relativeFilePath = path
+        .relative(process.cwd(), file.path)
+        .split(path.sep)
+        .join('/');
+
+      const receiptMetadata = {
+        originalName: file.originalname,
+        generatedName: file.filename,
+        path: relativeFilePath,
+        mimeType: file.mimetype,
+        size: file.size,
+        documentType: resolvedReceiptType,
+        uploadedAt: new Date(),
+      };
+
+      const updatedDelivery = await this.deliveryRepository.addReceipt(
+        deliveryId,
+        receiptMetadata
+      );
+
+      logger.info(
+        `Comprobante '${resolvedReceiptType}' ('${file.originalname}' -> '${file.filename}') asociado exitosamente a la entrega #${updatedDelivery?.codigoSeguimiento || deliveryId}`
+      );
+
+      return {
+        delivery: updatedDelivery,
+        receipt: receiptMetadata,
+      };
+    } catch (error) {
+      if (
+        !(error instanceof DeliveryNotFoundError) &&
+        !(error instanceof InvalidIdError) &&
+        !(error instanceof FileRequiredError) &&
+        !(error instanceof InvalidDocumentTypeError)
+      ) {
+        removeUploadedFileSafely(file);
+        logger.error(
+          `Error al guardar comprobante para la entrega ${deliveryId}: ${error.message}`
+        );
+        throw new FileSaveError(
+          `Error al guardar el comprobante de la entrega: ${error.message}`
+        );
+      }
+      throw error;
+    }
   }
 }
