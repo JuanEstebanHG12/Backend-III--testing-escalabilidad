@@ -3,6 +3,7 @@ import {
   ERROR_DICTIONARY,
   RouteNotFoundError,
 } from '../errors/index.js';
+import { logger } from '../config/logger.config.js';
 
 /**
  * Normaliza cualquier error (de dominio, de Mongoose/MongoDB, de sintaxis JSON o inesperado)
@@ -70,13 +71,16 @@ const normalizeError = (err) => {
     });
   }
 
-  // 7. Fallback para cualquier error no previsto
-  return new AppError({
+  // 7. Fallback para cualquier error no previsto del servidor
+  const unexpectedError = new AppError({
     message: err.message || ERROR_DICTIONARY.INTERNAL_SERVER_ERROR.message,
     code: err.code || ERROR_DICTIONARY.INTERNAL_SERVER_ERROR.code,
     statusCode: err.statusCode || ERROR_DICTIONARY.INTERNAL_SERVER_ERROR.statusCode,
     details: err.details || null,
   });
+  unexpectedError.isOperational = Boolean(err.isOperational);
+  unexpectedError.isCritical = Boolean(err.isCritical);
+  return unexpectedError;
 };
 
 /**
@@ -88,16 +92,22 @@ export const notFoundMiddleware = (req, res, next) => {
 };
 
 /**
- * Middleware global centralizado de manejo de errores.
- * Único punto del sistema que envía respuestas HTTP de error al cliente,
- * garantizando una estructura clara, predecible y uniforme en toda la API.
+ * Middleware global centralizado de manejo de errores integrado con Winston.
+ * - Errores críticos -> logger.fatal
+ * - Errores inesperados del servidor (status >= 500) -> logger.error
+ * - Errores esperados o de negocio (status < 500) -> logger.warning
  */
 export const errorMiddleware = (err, req, res, next) => {
   const normalizedError = normalizeError(err);
+  const logMessage = `[${normalizedError.code}] ${req.method} ${req.originalUrl} (${normalizedError.statusCode}) - ${normalizedError.message}`;
 
-  console.error(
-    `[ERROR] [${normalizedError.code}] ${req.method} ${req.originalUrl} -> ${normalizedError.statusCode}: ${normalizedError.message}`
-  );
+  if (normalizedError.isCritical || err?.isCritical) {
+    logger.fatal(logMessage);
+  } else if (normalizedError.statusCode >= 500 || !normalizedError.isOperational) {
+    logger.error(logMessage);
+  } else {
+    logger.warning(logMessage);
+  }
 
   return res.status(normalizedError.statusCode).json({
     success: false,
