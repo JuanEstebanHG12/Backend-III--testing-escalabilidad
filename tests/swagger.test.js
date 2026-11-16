@@ -43,6 +43,7 @@ describe('Pre-entrega Módulo 5 — Documentación de API con Swagger/OpenAPI', 
       expect(paths['/api/users/{id}']?.get).to.be.an('object');
       expect(paths['/api/users/{id}']?.put).to.be.an('object');
       expect(paths['/api/users/{id}']?.delete).to.be.an('object');
+      expect(paths['/api/users/{id}/documents']?.post).to.be.an('object');
 
       expect(paths['/api/orders']?.get).to.be.an('object');
       expect(paths['/api/orders']?.post).to.be.an('object');
@@ -50,12 +51,14 @@ describe('Pre-entrega Módulo 5 — Documentación de API con Swagger/OpenAPI', 
       expect(paths['/api/orders/{id}']?.put).to.be.an('object');
       expect(paths['/api/orders/{id}']?.delete).to.be.an('object');
       expect(paths['/api/orders/{id}/status']?.patch).to.be.an('object');
+      expect(paths['/api/orders/{id}/receipt']?.post).to.be.an('object');
 
       expect(paths['/api/deliveries']?.get).to.be.an('object');
       expect(paths['/api/deliveries']?.post).to.be.an('object');
       expect(paths['/api/deliveries/{id}']?.get).to.be.an('object');
       expect(paths['/api/deliveries/{id}']?.put).to.be.an('object');
       expect(paths['/api/deliveries/{id}']?.delete).to.be.an('object');
+      expect(paths['/api/deliveries/{id}/receipt']?.post).to.be.an('object');
 
       expect(paths['/api/mocks/users']?.get).to.be.an('object');
       expect(paths['/api/mocks/orders']?.get).to.be.an('object');

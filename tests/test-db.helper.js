@@ -166,8 +166,19 @@ const attachInMemoryModel = (Model, storeKey) => {
 
   Model.create = async (data) => {
     const now = new Date().toISOString();
+    const defaults = {};
+    if (storeKey === 'User') {
+      defaults.documents = [];
+    } else if (storeKey === 'Order') {
+      defaults.items = [];
+      defaults.comprobantes = [];
+    } else if (storeKey === 'Delivery') {
+      defaults.comprobantes = [];
+    }
+
     const record = {
       _id: data._id ? String(data._id) : new mongoose.Types.ObjectId().toString(),
+      ...defaults,
       ...structuredClone(data),
       createdAt: now,
       updatedAt: now,
@@ -190,11 +201,28 @@ const attachInMemoryModel = (Model, storeKey) => {
     createChainableQuery(() => {
       const idx = memoryStore[storeKey].findIndex((doc) => String(doc._id) === String(id));
       if (idx === -1) return null;
-      memoryStore[storeKey][idx] = {
-        ...memoryStore[storeKey][idx],
-        ...structuredClone(updateData),
-        updatedAt: new Date().toISOString(),
-      };
+
+      const currentDoc = structuredClone(memoryStore[storeKey][idx]);
+      const payload = structuredClone(updateData || {});
+
+      if (payload.$push && typeof payload.$push === 'object') {
+        for (const [arrField, itemToPush] of Object.entries(payload.$push)) {
+          if (!Array.isArray(currentDoc[arrField])) {
+            currentDoc[arrField] = [];
+          }
+          currentDoc[arrField].push(itemToPush);
+        }
+        delete payload.$push;
+      }
+
+      if (payload.$set && typeof payload.$set === 'object') {
+        Object.assign(currentDoc, payload.$set);
+        delete payload.$set;
+      }
+
+      Object.assign(currentDoc, payload);
+      currentDoc.updatedAt = new Date().toISOString();
+      memoryStore[storeKey][idx] = currentDoc;
       return memoryStore[storeKey][idx];
     });
 
