@@ -1,4 +1,4 @@
-import { ORDER_STATUS, ORDER_PRIORITY } from '../constants/index.js';
+import { ORDER_STATUS, ORDER_PRIORITY, RECEIPT_TYPES } from '../constants/index.js';
 
 /**
  * Documentación OpenAPI de los endpoints del módulo Orders (/api/orders).
@@ -253,6 +253,75 @@ export const ordersPaths = {
           },
         },
         400: { $ref: '#/components/responses/BadRequestError' },
+        404: { $ref: '#/components/responses/NotFoundError' },
+        500: { $ref: '#/components/responses/InternalServerError' },
+      },
+    },
+  },
+
+  '/api/orders/{id}/receipt': {
+    post: {
+      tags: ['Orders'],
+      summary: 'Subir un comprobante asociado a un pedido (multipart/form-data)',
+      description:
+        'Recibe un archivo de comprobante vía multipart/form-data y lo asocia al pedido indicado. Verifica que el pedido exista, valida el tipo y tamaño del archivo (máx. 5 MB), lo almacena en uploads/receipts y registra los metadatos en la entidad pedido.',
+      parameters: [
+        {
+          name: 'id',
+          in: 'path',
+          required: true,
+          description: 'ObjectId del pedido al que se asociará el comprobante',
+          schema: { type: 'string', example: '65f1a2b3c4d5e6f7a8b9c0d2' },
+        },
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          'multipart/form-data': {
+            schema: {
+              type: 'object',
+              required: ['file'],
+              properties: {
+                file: {
+                  type: 'string',
+                  format: 'binary',
+                  description:
+                    'Archivo de comprobante (campo "file", también acepta alias "receipt" o "comprobante"). Formatos aceptados: PDF, JPG, JPEG, PNG, WEBP. Tamaño máximo: 5 MB.',
+                },
+                documentType: {
+                  type: 'string',
+                  enum: Object.values(RECEIPT_TYPES),
+                  default: RECEIPT_TYPES.COMPROBANTE_PAGO,
+                  example: RECEIPT_TYPES.COMPROBANTE_PAGO,
+                  description:
+                    'Tipo de comprobante opcional (también acepta alias "tipoDocumento"). Opciones permitidas: comprobante_pago, comprobante_entrega, factura, remito.',
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        201: {
+          description: 'Comprobante subido y asociado exitosamente al pedido',
+          content: {
+            'application/json': {
+              schema: {
+                allOf: [
+                  { $ref: '#/components/schemas/SuccessResponse' },
+                  {
+                    type: 'object',
+                    properties: {
+                      data: { $ref: '#/components/schemas/Order' },
+                      receipt: { $ref: '#/components/schemas/FileMetadata' },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+        400: { $ref: '#/components/responses/FileUploadBadRequestError' },
         404: { $ref: '#/components/responses/NotFoundError' },
         500: { $ref: '#/components/responses/InternalServerError' },
       },

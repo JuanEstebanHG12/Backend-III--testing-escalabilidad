@@ -1,4 +1,4 @@
-import { DELIVERY_STATUS } from '../constants/index.js';
+import { DELIVERY_STATUS, RECEIPT_TYPES } from '../constants/index.js';
 
 /**
  * Documentación OpenAPI de los endpoints del módulo Deliveries (/api/deliveries).
@@ -193,6 +193,75 @@ export const deliveriesPaths = {
           },
         },
         400: { $ref: '#/components/responses/BadRequestError' },
+        404: { $ref: '#/components/responses/NotFoundError' },
+        500: { $ref: '#/components/responses/InternalServerError' },
+      },
+    },
+  },
+
+  '/api/deliveries/{id}/receipt': {
+    post: {
+      tags: ['Deliveries'],
+      summary: 'Subir un comprobante asociado a una entrega (multipart/form-data)',
+      description:
+        'Recibe un archivo de comprobante vía multipart/form-data y lo asocia a la entrega logística indicada. Verifica que la entrega exista, valida el tipo y tamaño del archivo (máx. 5 MB), lo almacena en uploads/receipts y registra los metadatos en la entidad entrega.',
+      parameters: [
+        {
+          name: 'id',
+          in: 'path',
+          required: true,
+          description: 'ObjectId de la entrega a la que se asociará el comprobante',
+          schema: { type: 'string', example: '65f1a2b3c4d5e6f7a8b9c0d3' },
+        },
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          'multipart/form-data': {
+            schema: {
+              type: 'object',
+              required: ['file'],
+              properties: {
+                file: {
+                  type: 'string',
+                  format: 'binary',
+                  description:
+                    'Archivo de comprobante de entrega (campo "file", también acepta alias "receipt" o "comprobante"). Formatos aceptados: PDF, JPG, JPEG, PNG, WEBP. Tamaño máximo: 5 MB.',
+                },
+                documentType: {
+                  type: 'string',
+                  enum: Object.values(RECEIPT_TYPES),
+                  default: RECEIPT_TYPES.COMPROBANTE_ENTREGA,
+                  example: RECEIPT_TYPES.COMPROBANTE_ENTREGA,
+                  description:
+                    'Tipo de comprobante opcional (también acepta alias "tipoDocumento"). Opciones permitidas: comprobante_pago, comprobante_entrega, factura, remito.',
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        201: {
+          description: 'Comprobante de entrega subido y asociado exitosamente',
+          content: {
+            'application/json': {
+              schema: {
+                allOf: [
+                  { $ref: '#/components/schemas/SuccessResponse' },
+                  {
+                    type: 'object',
+                    properties: {
+                      data: { $ref: '#/components/schemas/Delivery' },
+                      receipt: { $ref: '#/components/schemas/FileMetadata' },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+        400: { $ref: '#/components/responses/FileUploadBadRequestError' },
         404: { $ref: '#/components/responses/NotFoundError' },
         500: { $ref: '#/components/responses/InternalServerError' },
       },

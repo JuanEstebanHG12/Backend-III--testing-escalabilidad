@@ -4,6 +4,9 @@ import {
   ORDER_PRIORITY,
   DELIVERY_STATUS,
   PRODUCT_STATUS,
+  USER_DOCUMENT_TYPES,
+  RECEIPT_TYPES,
+  ALLOWED_FILE_MIMETYPES,
   ERROR_DICTIONARY,
 } from '../constants/index.js';
 
@@ -12,6 +15,9 @@ const orderStates = Object.values(ORDER_STATUS);
 const orderPriorities = Object.values(ORDER_PRIORITY);
 const deliveryStates = Object.values(DELIVERY_STATUS);
 const productStates = Object.values(PRODUCT_STATUS);
+const userDocumentTypes = Object.values(USER_DOCUMENT_TYPES);
+const receiptDocumentTypes = Object.values(RECEIPT_TYPES);
+const allDocumentTypes = [...new Set([...userDocumentTypes, ...receiptDocumentTypes])];
 
 /**
  * Schemas reutilizables de OpenAPI 3.0 para ShipNow API:
@@ -45,6 +51,13 @@ export const swaggerSchemas = {
         enum: uniqueUserRoles,
         example: USER_ROLES.CLIENTE,
         description: 'Rol del usuario dentro de la plataforma logística',
+      },
+      documents: {
+        type: 'array',
+        description: 'Metadatos de los documentos y licencias subidos por el usuario',
+        items: {
+          $ref: '#/components/schemas/FileMetadata',
+        },
       },
       createdAt: {
         type: 'string',
@@ -218,6 +231,13 @@ export const swaggerSchemas = {
         example: ORDER_PRIORITY.ALTA,
         description: 'Nivel de prioridad logística',
       },
+      comprobantes: {
+        type: 'array',
+        description: 'Metadatos de los comprobantes asociados al pedido',
+        items: {
+          $ref: '#/components/schemas/FileMetadata',
+        },
+      },
       createdAt: {
         type: 'string',
         format: 'date-time',
@@ -375,6 +395,13 @@ export const swaggerSchemas = {
         type: 'string',
         example: 'Av. Libertador 1450, Buenos Aires',
       },
+      comprobantes: {
+        type: 'array',
+        description: 'Metadatos de los comprobantes de entrega asociados',
+        items: {
+          $ref: '#/components/schemas/FileMetadata',
+        },
+      },
       createdAt: {
         type: 'string',
         format: 'date-time',
@@ -511,6 +538,54 @@ export const swaggerSchemas = {
       category: {
         type: 'string',
         example: 'embalaje',
+      },
+    },
+  },
+
+  // 5.5 METADATOS DE ARCHIVO SUBIDO (FileMetadata)
+  FileMetadata: {
+    type: 'object',
+    description: 'Metadatos registrados en MongoDB de un documento o comprobante almacenado en el servidor',
+    required: ['originalName', 'generatedName', 'path', 'mimeType', 'size', 'documentType', 'uploadedAt'],
+    properties: {
+      originalName: {
+        type: 'string',
+        example: 'dni_frente.pdf',
+        description: 'Nombre original del archivo enviado por el cliente',
+      },
+      generatedName: {
+        type: 'string',
+        example: '1763314800000-482910-dni_frente.pdf',
+        description: 'Nombre único generado por Multer en el servidor',
+      },
+      path: {
+        type: 'string',
+        example: 'uploads/documents/1763314800000-482910-dni_frente.pdf',
+        description: 'Ruta relativa dentro del servidor donde se almacenó el archivo',
+      },
+      mimeType: {
+        type: 'string',
+        enum: ALLOWED_FILE_MIMETYPES,
+        example: 'application/pdf',
+        description: 'Tipo MIME validado del archivo',
+      },
+      size: {
+        type: 'integer',
+        minimum: 0,
+        example: 145280,
+        description: 'Tamaño del archivo en bytes (máximo 5 MB)',
+      },
+      documentType: {
+        type: 'string',
+        enum: allDocumentTypes,
+        example: USER_DOCUMENT_TYPES.IDENTIFICACION,
+        description: 'Categoría o tipo de documento/comprobante asociado',
+      },
+      uploadedAt: {
+        type: 'string',
+        format: 'date-time',
+        example: '2026-11-16T17:40:00.000Z',
+        description: 'Fecha y hora de carga del archivo',
       },
     },
   },
@@ -858,6 +933,116 @@ export const swaggerErrorResponses = {
                 path: '/api/mocks/seed?collection=facturas',
                 method: 'POST',
                 timestamp: '2026-11-15T23:45:00.000Z',
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+
+  FileUploadBadRequestError: {
+    description:
+      'Error de validación en la carga de archivos: archivo faltante, tipo MIME/extensión no permitido, tamaño máximo superado (5 MB), campo de archivo inesperado o tipo de documento inválido',
+    content: {
+      'application/json': {
+        schema: { $ref: '#/components/schemas/ErrorResponse' },
+        examples: {
+          FileRequiredError: {
+            summary: 'Falta el archivo en la solicitud multipart/form-data',
+            value: {
+              success: false,
+              message: "No se recibió ningún archivo. Debe adjuntar un archivo en el campo 'file'",
+              error: {
+                code: 'FILE_REQUIRED',
+                name: 'FileRequiredError',
+                message: "No se recibió ningún archivo. Debe adjuntar un archivo en el campo 'file'",
+                statusCode: 400,
+                details: { expectedField: 'file' },
+                path: '/api/users/65f1a2b3c4d5e6f7a8b9c0d1/documents',
+                method: 'POST',
+                timestamp: '2026-11-16T17:40:00.000Z',
+              },
+            },
+          },
+          InvalidFileTypeError: {
+            summary: 'Formato o tipo MIME de archivo no permitido',
+            value: {
+              success: false,
+              message: "Tipo de archivo no permitido ('script.exe'). Tipos aceptados: PDF, JPG, JPEG, PNG, WEBP",
+              error: {
+                code: 'INVALID_FILE_TYPE',
+                name: 'InvalidFileTypeError',
+                message: "Tipo de archivo no permitido ('script.exe'). Tipos aceptados: PDF, JPG, JPEG, PNG, WEBP",
+                statusCode: 400,
+                details: {
+                  originalName: 'script.exe',
+                  receivedMimeType: 'application/x-msdownload',
+                  receivedExtension: '.exe',
+                  allowedMimeTypes: ALLOWED_FILE_MIMETYPES,
+                },
+                path: '/api/users/65f1a2b3c4d5e6f7a8b9c0d1/documents',
+                method: 'POST',
+                timestamp: '2026-11-16T17:40:00.000Z',
+              },
+            },
+          },
+          FileSizeExceededError: {
+            summary: 'Archivo supera el tamaño máximo permitido (5 MB)',
+            value: {
+              success: false,
+              message: 'El archivo supera el tamaño máximo permitido (5 MB)',
+              error: {
+                code: 'FILE_SIZE_EXCEEDED',
+                name: 'FileSizeExceededError',
+                message: 'El archivo supera el tamaño máximo permitido (5 MB)',
+                statusCode: 400,
+                details: { field: 'file', maxSizeBytes: 5242880 },
+                path: '/api/orders/65f1a2b3c4d5e6f7a8b9c0d2/receipt',
+                method: 'POST',
+                timestamp: '2026-11-16T17:40:00.000Z',
+              },
+            },
+          },
+          InvalidDocumentTypeError: {
+            summary: 'Tipo de documento o comprobante inválido',
+            value: {
+              success: false,
+              message:
+                "Tipo de documento inválido: 'pasaporte_falso'. Tipos de documento permitidos: identificacion, licencia, comprobante_domicilio, contrato",
+              error: {
+                code: 'INVALID_DOCUMENT_TYPE',
+                name: 'InvalidDocumentTypeError',
+                message:
+                  "Tipo de documento inválido: 'pasaporte_falso'. Tipos de documento permitidos: identificacion, licencia, comprobante_domicilio, contrato",
+                statusCode: 400,
+                details: {
+                  receivedType: 'pasaporte_falso',
+                  allowedTypes: userDocumentTypes,
+                },
+                path: '/api/users/65f1a2b3c4d5e6f7a8b9c0d1/documents',
+                method: 'POST',
+                timestamp: '2026-11-16T17:40:00.000Z',
+              },
+            },
+          },
+          InvalidFileFieldError: {
+            summary: 'Nombre de campo de archivo inesperado',
+            value: {
+              success: false,
+              message: "Campo de archivo inesperado: 'avatar'. Campos permitidos: file, document, documento",
+              error: {
+                code: 'INVALID_FILE_FIELD',
+                name: 'InvalidFileFieldError',
+                message: "Campo de archivo inesperado: 'avatar'. Campos permitidos: file, document, documento",
+                statusCode: 400,
+                details: {
+                  receivedField: 'avatar',
+                  expectedFields: ['file', 'document', 'documento'],
+                },
+                path: '/api/users/65f1a2b3c4d5e6f7a8b9c0d1/documents',
+                method: 'POST',
+                timestamp: '2026-11-16T17:40:00.000Z',
               },
             },
           },
