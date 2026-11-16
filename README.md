@@ -1,13 +1,13 @@
-# 📦 ShipNow API — Arquitectura por Capas, Mocking, Manejo de Errores, Logging & Swagger UI
+# 📦 ShipNow API — Arquitectura por Capas, Mocking, Errores, Logging, Swagger & Testing Funcional
 
-Bienvenido al repositorio de la API de **ShipNow**, estructurada profesionalmente en **3 capas (Controller - Service - Repository)**, con validación estricta de variables de entorno, sistema de **Mocking y Seeding relacional**, **capa centralizada de manejo de errores**, **sistema de logging con Winston y rotación de archivos** y **documentación interactiva con Swagger / OpenAPI 3.0**.
+Bienvenido al repositorio de la API de **ShipNow**, estructurada profesionalmente en **3 capas (Controller - Service - Repository)**, con validación estricta de variables de entorno, sistema de **Mocking y Seeding relacional**, **capa centralizada de manejo de errores**, **sistema de logging con Winston y rotación de archivos**, **documentación interactiva con Swagger / OpenAPI 3.0** y **suite de testing funcional con Mocha, Chai y Supertest**.
 
 ---
 
 ## 🏗️ Arquitectura del Sistema
 
 ```text
-[ Cliente HTTP / Swagger UI (/api/docs) ]
+[ Cliente HTTP / Swagger UI (/api/docs) / Supertest (Testing) ]
        │
        ▼
 [ Middleware HTTP Logger (Winston 'http') ]
@@ -38,7 +38,7 @@ backend3/
 │   └── .gitkeep                    # Carpeta de logs documentada (archivos .log ignorados en Git)
 ├── src/
 │   ├── config/
-│   │   ├── env.config.js           # Validación de variables de entorno con dotenv
+│   │   ├── env.config.js           # Validación de variables de entorno y aislamiento de DB para testing
 │   │   ├── db.config.js            # Conexión centralizada a MongoDB con logs de Winston
 │   │   ├── logger.config.js        # Configuración centralizada de Winston y rotación diaria
 │   │   ├── swagger.config.js       # Configuración centralizada de OpenAPI 3.0.3 y Swagger UI
@@ -97,13 +97,16 @@ backend3/
 │   │   ├── mock.routes.js          # Router mínimo de Mocks (/api/mocks)
 │   │   ├── logger.routes.js        # Router mínimo de Prueba de Logger (/api/loggerTest y /loggerTest)
 │   │   └── index.js                # Enrutador principal (/api)
-│   ├── app.js                      # Configuración de Express, Swagger UI y middlewares globales
-│   └── server.js                   # Punto de entrada de la aplicación
+│   ├── app.js                      # Instancia de Express exportable sin abrir puerto (para Supertest)
+│   └── server.js                   # Punto de entrada que conecta a DB y levanta el servidor HTTP
 ├── tests/
-│   ├── error-handling.test.js      # Suite automatizada de pruebas de errores, servicios y mocks
-│   ├── logger.test.js              # Suite automatizada de pruebas del logger Winston y rotación
-│   └── swagger.test.js             # Suite automatizada de pruebas de Swagger UI y schemas OpenAPI
+│   ├── test-db.helper.js           # Configuración y limpieza automática de base de datos de testing
+│   ├── functional.api.test.js      # Suite de tests funcionales end-to-end (Mocha, Chai, Supertest)
+│   ├── error-handling.test.js      # Pruebas del diccionario de errores, middleware y servicios
+│   ├── logger.test.js              # Pruebas de niveles de Winston, formato y /logs/error.log
+│   └── swagger.test.js             # Pruebas de especificación OpenAPI y ruta /api/docs
 ├── .env.example
+├── .env.test.example
 ├── .gitignore
 ├── package.json
 └── README.md
@@ -111,43 +114,63 @@ backend3/
 
 ---
 
+## 🧪 Testing Funcional Automatizado (Pre-entrega Módulo 6)
+
+### 1. Herramientas Utilizadas
+- **Mocha (`mocha`)**: framework de ejecución y organización de suites de pruebas (`describe`, `it`, `before`, `beforeEach`, `after`).
+- **Chai (`chai`)**: librería de aserciones expresivas (`expect`) para verificar códigos HTTP, estructura del body y propiedades de éxito y error.
+- **Supertest (`supertest`)**: cliente de pruebas HTTP que importa directamente la aplicación Express (`src/app.js`) sin necesidad de levantar manualmente un puerto en `src/server.js`.
+
+### 2. Entorno de Testing y Variables de Entorno Necesarias
+El entorno de testing está **completamente separado** del entorno de desarrollo:
+- Al ejecutar `npm test`, se define `NODE_ENV=test`.
+- `src/config/env.config.js` carga `.env.test` (si existe) con prioridad sobre `.env` y selecciona automáticamente una base de datos exclusiva de pruebas (`MONGODB_URI_TEST`, o añade el sufijo `_test` a `MONGODB_URI`, por ejemplo `mongodb://localhost:27017/shipnow_test`).
+- Variables requeridas (ver `.env.example` y `.env.test.example`):
+  ```env
+  PORT=8080
+  NODE_ENV=test
+  MONGODB_URI=mongodb://localhost:27017/shipnow
+  MONGODB_URI_TEST=mongodb://localhost:27017/shipnow_test
+  ```
+
+### 3. Base de Datos de Testing y Estrategia de Limpieza
+- **Base de datos aislada**: las pruebas apuntan a `shipnow_test` (`MONGODB_URI_TEST`), evitando tocar datos de desarrollo. Además, `tests/test-db.helper.js` cuenta con soporte automático de persistencia aislada en memoria si se ejecuta en un entorno CI/local donde el demonio `mongod` no esté corriendo.
+- **Limpieza controlada (`beforeEach` / `after`)**: antes de cada test (`beforeEach`) y al finalizar la suite (`after`), `clearTestDatabase()` vacía las colecciones (`User`, `Order`, `Delivery`, `Product`), garantizando que cada prueba sea 100% repetible e independiente del orden de ejecución.
+
+### 4. Cómo Ejecutar los Tests
+```bash
+npm test
+```
+Esto ejecuta el script configurado en `package.json`:
+```json
+"test": "NODE_ENV=test mocha \"tests/**/*.test.js\" --timeout 15000 --exit"
+```
+
+### 5. Módulos y Casos Cubiertos por la Suite de Tests
+1. **Usuarios (`/api/users`)**:
+   - Casos exitosos: listado vacío inicial, creación de usuario (`201`) verificando ocultamiento de `password`, consulta por ID (`200`).
+   - Casos de error: campos faltantes (`400 MISSING_REQUIRED_FIELDS`), correo duplicado (`409 USER_ALREADY_EXISTS`), rol inválido (`400 INVALID_USER_ROLE`), usuario inexistente (`404 USER_NOT_FOUND`), ID inválido (`400 INVALID_OBJECT_ID`).
+2. **Pedidos (`/api/orders`)**:
+   - Casos exitosos: creación previa de usuario cliente válido y creación de pedido con ítems (`OrderItem`, `201`), listado general (`200`), consulta por ID (`200`) y cambio de estado (`PATCH /api/orders/:id/status`, `200`).
+   - Casos de error: datos incompletos (`400 MISSING_REQUIRED_FIELDS`), cliente inexistente (`404 USER_NOT_FOUND`), pedido no encontrado (`404 ORDER_NOT_FOUND`), estado inválido (`400 INVALID_STATE`), valores negativos (`400 NEGATIVE_VALUE`).
+3. **Entregas (`/api/deliveries`) y Productos (`/api/products`)**:
+   - Creación vinculada a pedido y repartidor válido (`201`), rechazo de usuario sin rol `repartidor` (`400 INVALID_USER_ROLE`), rechazo de precios negativos (`400 NEGATIVE_VALUE`).
+4. **Mocks (`/api/mocks`)**:
+   - Casos exitosos: generación en memoria (`GET /api/mocks/users`, `GET /api/mocks/orders`) y carga controlada en base de datos (`POST /api/mocks/seed` y `DELETE /api/mocks/clear`).
+   - Casos de error: cantidades negativas (`400 NEGATIVE_VALUE`), cantidades no numéricas o cero (`400 INVALID_MOCK_QUANTITY`) y colección inválida (`400 INVALID_MOCK_COLLECTION`).
+5. **Logger (`/api/loggerTest`), Swagger (`/api/docs`) y Rutas 404**:
+   - Verificación de los 6 niveles de Winston y persistencia exclusiva de `error` y `fatal` en `logs/error.log`.
+   - Verificación de Swagger UI (`GET /api/docs/`) y especificación OpenAPI (`GET /api/docs.json`).
+   - Verificación de rutas inexistentes (`404 ROUTE_NOT_FOUND`).
+
+---
+
 ## 📖 Documentación Interactiva con Swagger / OpenAPI (Pre-entrega Módulo 5)
 
-### 1. Ruta de Acceso a Swagger UI
-Una vez iniciado el servidor, la documentación interactiva se encuentra disponible en:
 - **Swagger UI Interactivo**: `http://localhost:8080/api/docs`
 - **Especificación OpenAPI en JSON**: `http://localhost:8080/api/docs.json`
-
-La configuración de Swagger está completamente separada de los archivos de rutas (`src/routes/`), ubicándose en `src/config/swagger.config.js` y dividida modularmente dentro de `src/docs/`.
-
-### 2. Módulos (Tags) Documentados
-La documentación está organizada en los siguientes grupos (`tags`):
-- **`Users` (`/api/users`)**: listado, consulta por ID, creación, actualización y eliminación de usuarios (`cliente`, `repartidor`, `admin`).
-- **`Orders` (`/api/orders`)**: listado con filtros (`estado`, `prioridad`), consulta por ID, creación con ítems de pedido (`OrderItem`), actualización general, cambio de estado (`PATCH /api/orders/:id/status`) y eliminación.
-- **`Deliveries` (`/api/deliveries`)**: listado por estado, consulta por ID, creación verificando pedido y rol `repartidor`, actualización y eliminación.
-- **`Mocks` (`/api/mocks`)**: generación en memoria (`users`, `orders`, `deliveries`, `all`), carga controlada en MongoDB (`POST /api/mocks/seed`) y limpieza (`DELETE /api/mocks/clear`).
-- **`Logger` (`/api/loggerTest`)**: endpoint de validación interna para disparar los 6 niveles de Winston (`debug`, `http`, `info`, `warning`, `error`, `fatal`).
-- **`Products` (`/api/products`)**: gestión del catálogo de productos e inventario.
-
-### 3. Schemas Reutilizables (`components.schemas`)
-Definidos en `src/docs/schemas.docs.js`:
-- **Usuario**: `User`, `UserInput`, `UserUpdateInput`, `MockUser`.
-- **Pedido**: `Order`, `OrderInput`, `OrderUpdateInput`, `OrderStatusInput`.
-- **Ítem de Pedido**: `OrderItem` (`nombre`, `cantidad`, `precioUnitario`).
-- **Entrega**: `Delivery`, `DeliveryInput`, `DeliveryUpdateInput`.
-- **Respuesta Exitosa**: `SuccessResponse`, `MockSeedResponse`, `MockAllResponse`, `LoggerTestResponse`.
-- **Respuesta de Error**: `ErrorResponse` y `ErrorDetail`, reflejando con exactitud la salida del middleware global de errores (`400`, `404`, `409`, `500`).
-
-### 4. Aclaraciones para Probar los Endpoints desde Swagger UI
-1. **Generar datos rápidamente sin tocar la base de datos**:
-   - Probá `GET /api/mocks/users?qty=2`, `GET /api/mocks/orders?qty=3` o `GET /api/mocks/all?qty=2` desde la sección **Mocks**.
-2. **Poblar MongoDB para probar relaciones reales (`Users`, `Orders`, `Deliveries`)**:
-   - Ejecutá primero `POST /api/mocks/seed` con `qty=5` y `collection=all` (o `usuarios`).
-   - Luego consultá `GET /api/users` o `GET /api/orders` para copiar un `_id` real de MongoDB y utilizarlo en `GET /api/orders/{id}`, `PATCH /api/orders/{id}/status` o `POST /api/deliveries`.
-3. **Probar el manejo profesional de errores**:
-   - En `GET /api/mocks/users`, enviá `qty=-5` (`400 NEGATIVE_VALUE`) o `qty=abc` (`400 INVALID_MOCK_QUANTITY`).
-   - En `PATCH /api/orders/{id}/status`, enviá `{ "estado": "invalido" }` (`400 INVALID_STATE`).
-   - En `GET /api/orders/{id}`, enviá un ObjectId inexistente como `65f1a2b3c4d5e6f7a8b9c0d9` (`404 ORDER_NOT_FOUND`) o un ID mal formado como `123` (`400 INVALID_OBJECT_ID`).
+- **Módulos (Tags) Documentados**: `Users`, `Orders`, `Deliveries`, `Mocks`, `Logger` y `Products`.
+- **Schemas Reutilizables**: `User`, `Order`, `OrderItem`, `Delivery`, `Product`, `SuccessResponse` y `ErrorResponse`.
 
 ---
 
@@ -155,18 +178,12 @@ Definidos en `src/docs/schemas.docs.js`:
 
 - **Herramienta**: `winston` + `winston-daily-rotate-file` (`src/config/logger.config.js`).
 - **Niveles**: `fatal` (`0`), `error` (`1`), `warning` (`2`), `info` (`3`), `http` (`4`), `debug` (`5`).
-- **Comportamiento por entorno**:
-  - `NODE_ENV=development`: registra desde `debug` en adelante.
-  - `NODE_ENV=production`: registra desde `info` en adelante (`info`, `warning`, `error`, `fatal`).
-- **Archivos y Rotación (`/logs`)**:
-  - `logs/error.log`: almacena **exclusivamente** niveles `error` y `fatal`.
-  - `logs/error-YYYY-MM-DD.log` y `logs/combined-YYYY-MM-DD.log`: rotación diaria automática (`maxSize: '10m'`, `maxFiles: '14d'`).
-  - Ignorados en `.gitignore` (`logs/*.log`, `logs/*.json`, conservando `logs/.gitkeep`).
+- **Archivos (`/logs`)**: `logs/error.log` (solo `error` y `fatal`), `logs/error-YYYY-MM-DD.log` y `logs/combined-YYYY-MM-DD.log` (ignorados en `.gitignore`).
 - **Endpoint de prueba**: `GET /api/loggerTest` (y `GET /loggerTest`).
 
 ---
 
-## 🚀 Cómo Levantar el Servidor y Ejecutar Pruebas
+## 🚀 Instalación y Puesta en Marcha
 
 1. **Instalar dependencias**:
    ```bash
@@ -177,20 +194,14 @@ Definidos en `src/docs/schemas.docs.js`:
    ```bash
    cp .env.example .env
    ```
-   Asegúrate de tener MongoDB activo y las variables definidas en `.env` (`PORT=8080`, `NODE_ENV=development`, `MONGODB_URI=mongodb://localhost:27017/shipnow`).
 
-3. **Ejecutar la suite de pruebas automatizadas**:
+3. **Ejecutar la suite de pruebas funcionales**:
    ```bash
    npm test
    ```
 
 4. **Levantar el servidor**:
-   - Modo desarrollo:
-     ```bash
-     npm run dev
-     ```
-   - Modo producción:
-     ```bash
-     npm start
-     ```
-   - Abrí en tu navegador: `http://localhost:8080/api/docs`
+   ```bash
+   npm run dev
+   ```
+   - Documentación interactiva: `http://localhost:8080/api/docs`
