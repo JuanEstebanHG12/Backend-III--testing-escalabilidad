@@ -57,12 +57,22 @@ export const generateMockUsers = (qty = 10) => {
 export const generateMockOrder = (clienteId = null, index = null) => {
   const idCliente = clienteId || faker.database.mongodbObjectId();
   const suffix = index !== null ? `${index}-${faker.string.alphanumeric({ length: 5, casing: 'upper' })}` : faker.string.alphanumeric({ length: 7, casing: 'upper' });
+  const itemName = `${faker.commerce.productAdjective()} ${faker.commerce.product()}`;
+  const cantidad = faker.number.int({ min: 1, max: 4 });
+  const precioUnitario = Number(faker.commerce.price({ min: 1500, max: 15000, dec: 0 }));
 
   return {
     codigo: `PED-${suffix}`,
     cliente: idCliente,
-    descripcion: `${faker.commerce.productAdjective()} ${faker.commerce.product()}`,
-    total: Number(faker.commerce.price({ min: 1500, max: 50000, dec: 0 })),
+    descripcion: itemName,
+    items: [
+      {
+        nombre: itemName,
+        cantidad,
+        precioUnitario,
+      },
+    ],
+    total: cantidad * precioUnitario,
     direccionEntrega: `${faker.location.streetAddress()}, ${faker.location.city()}`,
     estado: faker.helpers.arrayElement(Object.values(ORDER_STATUS)),
     prioridad: faker.helpers.arrayElement(Object.values(ORDER_PRIORITY)),

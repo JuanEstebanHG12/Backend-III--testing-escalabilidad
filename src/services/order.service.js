@@ -85,6 +85,7 @@ export class OrderService {
       codigo,
       cliente,
       descripcion,
+      items = [],
       total,
       direccionEntrega,
       estado = ORDER_STATUS.PENDIENTE,
@@ -97,6 +98,25 @@ export class OrderService {
         { required: ['cliente', 'descripcion', 'total', 'direccionEntrega'] },
         ERROR_DICTIONARY.MISSING_REQUIRED_FIELDS.code
       );
+    }
+
+    if (!Array.isArray(items)) {
+      throw new ValidationError('El campo items debe ser un arreglo de ítems de pedido', {
+        field: 'items',
+      });
+    }
+
+    for (const item of items) {
+      if (item.cantidad !== undefined && Number(item.cantidad) < 0) {
+        throw new NegativeValueError('items.cantidad', item.cantidad, 'La cantidad del ítem no puede ser negativa');
+      }
+      if (item.precioUnitario !== undefined && Number(item.precioUnitario) < 0) {
+        throw new NegativeValueError(
+          'items.precioUnitario',
+          item.precioUnitario,
+          'El precio unitario del ítem no puede ser negativo'
+        );
+      }
     }
 
     if (!isValidObjectId(cliente)) {
@@ -149,6 +169,7 @@ export class OrderService {
       codigo: orderCode,
       cliente,
       descripcion: String(descripcion).trim(),
+      items,
       total: numericTotal,
       direccionEntrega: String(direccionEntrega).trim(),
       estado,

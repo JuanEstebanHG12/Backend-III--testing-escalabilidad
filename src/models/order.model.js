@@ -1,6 +1,29 @@
 import mongoose from 'mongoose';
 import { ORDER_STATUS, ORDER_PRIORITY } from '../constants/index.js';
 
+const orderItemSchema = new mongoose.Schema(
+  {
+    nombre: {
+      type: String,
+      required: [true, 'El nombre del ítem es obligatorio'],
+      trim: true,
+    },
+    cantidad: {
+      type: Number,
+      required: [true, 'La cantidad del ítem es obligatoria'],
+      min: [1, 'La cantidad mínima por ítem es 1'],
+      default: 1,
+    },
+    precioUnitario: {
+      type: Number,
+      required: [true, 'El precio unitario del ítem es obligatorio'],
+      min: [0, 'El precio unitario no puede ser negativo'],
+      default: 0,
+    },
+  },
+  { _id: false }
+);
+
 const orderSchema = new mongoose.Schema(
   {
     codigo: {
@@ -18,6 +41,10 @@ const orderSchema = new mongoose.Schema(
       type: String,
       required: [true, 'La descripción del pedido es obligatoria'],
       trim: true,
+    },
+    items: {
+      type: [orderItemSchema],
+      default: [],
     },
     total: {
       type: Number,
