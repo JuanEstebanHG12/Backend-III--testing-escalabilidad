@@ -2,6 +2,7 @@ import { DeliveryRepository } from '../repositories/delivery.repository.js';
 import { OrderRepository } from '../repositories/order.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
 import { DELIVERY_STATUS, USER_ROLES } from '../constants/index.js';
+import { logger } from '../config/logger.config.js';
 import { isValidObjectId } from '../utils/validators.util.js';
 import {
   DeliveryNotFoundError,
@@ -16,8 +17,8 @@ import {
 
 /**
  * Capa Service de Entregas (Deliveries):
- * Gestiona la lógica de negocio de entregas (asociación con pedido y repartidor válido, estados de entrega)
- * y lanza errores personalizados del dominio.
+ * Gestiona la lógica de negocio de entregas (asociación con pedido y repartidor válido, estados de entrega),
+ * registra eventos con Winston y lanza errores personalizados del dominio.
  */
 export class DeliveryService {
   constructor() {
@@ -54,6 +55,7 @@ export class DeliveryService {
 
     const delivery = await this.deliveryRepository.getById(id);
     if (!delivery) {
+      logger.warning(`Entrega no encontrada con ID: ${id}`);
       throw new DeliveryNotFoundError(id);
     }
     return delivery;
@@ -98,15 +100,20 @@ export class DeliveryService {
 
     const existingOrder = await this.orderRepository.getById(pedido);
     if (!existingOrder) {
+      logger.warning(`Intento de crear entrega con pedido inexistente (ID: ${pedido})`);
       throw new OrderNotFoundError(pedido);
     }
 
     const existingDriver = await this.userRepository.getById(repartidor);
     if (!existingDriver) {
+      logger.warning(`Intento de asignar entrega a repartidor inexistente (ID: ${repartidor})`);
       throw new UserNotFoundError(repartidor);
     }
 
     if (existingDriver.rol !== USER_ROLES.REPARTIDOR) {
+      logger.warning(
+        `Usuario ${existingDriver.nombre} con rol '${existingDriver.rol}' no puede ser asignado como repartidor`
+      );
       throw new InvalidRoleError(
         existingDriver.rol,
         [USER_ROLES.REPARTIDOR],
@@ -132,7 +139,7 @@ export class DeliveryService {
         ? String(codigoSeguimiento).trim()
         : `ENT-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
 
-    return await this.deliveryRepository.create({
+    const createdDelivery = await this.deliveryRepository.create({
       codigoSeguimiento: trackingCode,
       pedido,
       repartidor,
@@ -140,6 +147,11 @@ export class DeliveryService {
       fechaEstimada: parsedDate,
       direccion: String(direccion).trim(),
     });
+
+    logger.info(
+      `Entrega #${createdDelivery.codigoSeguimiento} creada y asignada al repartidor ${repartidor}`
+    );
+    return createdDelivery;
   }
 
   /**
@@ -183,7 +195,9 @@ export class DeliveryService {
       }
     }
 
-    return await this.deliveryRepository.update(id, dataToUpdate);
+    const updatedDelivery = await this.deliveryRepository.update(id, dataToUpdate);
+    logger.info(`Entrega #${updatedDelivery?.codigoSeguimiento || id} actualizada correctamente`);
+    return updatedDelivery;
   }
 
   /**
@@ -191,6 +205,8 @@ export class DeliveryService {
    */
   async deleteDelivery(id) {
     await this.getDeliveryById(id);
-    return await this.deliveryRepository.delete(id);
+    const deleted = await this.deliveryRepository.delete(id);
+    logger.info(`Entrega con ID ${id} eliminada correctamente`);
+    return deleted;
   }
 }

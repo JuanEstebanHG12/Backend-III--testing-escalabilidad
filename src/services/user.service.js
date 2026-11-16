@@ -1,5 +1,6 @@
 import { UserRepository } from '../repositories/user.repository.js';
 import { USER_ROLES } from '../constants/index.js';
+import { logger } from '../config/logger.config.js';
 import { isValidObjectId, isValidEmail } from '../utils/validators.util.js';
 import {
   UserNotFoundError,
@@ -12,7 +13,7 @@ import {
 
 /**
  * Capa Service de Usuarios:
- * Contiene la lógica de negocio para usuarios y lanza errores personalizados del dominio.
+ * Contiene la lógica de negocio para usuarios, registra eventos con Winston y lanza errores personalizados del dominio.
  * Nunca importa Mongoose; toda persistencia pasa por UserRepository.
  */
 export class UserService {
@@ -37,6 +38,7 @@ export class UserService {
 
     const user = await this.userRepository.getById(id);
     if (!user) {
+      logger.warning(`Usuario no encontrado con ID: ${id}`);
       throw new UserNotFoundError(id);
     }
     return user;
@@ -76,7 +78,6 @@ export class UserService {
       });
     }
 
-    // Regla de negocio: validar el rol usando constantes antes de consultar/insertar
     let assignedRole = USER_ROLES.CLIENTE;
     if (roleInput !== undefined && roleInput !== null && roleInput !== '') {
       const validRoles = Object.values(USER_ROLES);
@@ -86,7 +87,6 @@ export class UserService {
       assignedRole = roleInput;
     }
 
-    // Regla de negocio: no permitir emails duplicados
     const existingUser = await this.userRepository.getByEmail(email);
     if (existingUser) {
       throw new DuplicateResourceError(
@@ -103,7 +103,9 @@ export class UserService {
       rol: assignedRole,
     };
 
-    return await this.userRepository.create(newUser);
+    const createdUser = await this.userRepository.create(newUser);
+    logger.info(`Usuario registrado correctamente: ${createdUser.email} (rol: ${createdUser.rol})`);
+    return createdUser;
   }
 
   /**
@@ -163,7 +165,9 @@ export class UserService {
       delete dataToUpdate.role;
     }
 
-    return await this.userRepository.update(id, dataToUpdate);
+    const updatedUser = await this.userRepository.update(id, dataToUpdate);
+    logger.info(`Usuario con ID ${id} actualizado correctamente`);
+    return updatedUser;
   }
 
   /**
@@ -171,6 +175,8 @@ export class UserService {
    */
   async deleteUser(id) {
     await this.getUserById(id);
-    return await this.userRepository.delete(id);
+    const deleted = await this.userRepository.delete(id);
+    logger.info(`Usuario con ID ${id} eliminado correctamente`);
+    return deleted;
   }
 }

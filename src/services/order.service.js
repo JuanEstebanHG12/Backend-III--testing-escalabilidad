@@ -1,6 +1,7 @@
 import { OrderRepository } from '../repositories/order.repository.js';
 import { UserRepository } from '../repositories/user.repository.js';
 import { ORDER_STATUS, ORDER_PRIORITY } from '../constants/index.js';
+import { logger } from '../config/logger.config.js';
 import { isValidObjectId } from '../utils/validators.util.js';
 import {
   OrderNotFoundError,
@@ -16,8 +17,8 @@ import {
 
 /**
  * Capa Service de Pedidos (Orders):
- * Gestiona las reglas de negocio de pedidos (estados, prioridades, validación de cliente y totales)
- * y lanza errores personalizados del dominio.
+ * Gestiona las reglas de negocio de pedidos (estados, prioridades, validación de cliente y totales),
+ * registra eventos importantes con Winston y lanza errores personalizados del dominio.
  */
 export class OrderService {
   constructor() {
@@ -62,6 +63,7 @@ export class OrderService {
 
     const order = await this.orderRepository.getById(id);
     if (!order) {
+      logger.warning(`Pedido no encontrado con ID: ${id}`);
       throw new OrderNotFoundError(id);
     }
     return order;
@@ -101,9 +103,9 @@ export class OrderService {
       throw new InvalidIdError(cliente, 'cliente');
     }
 
-    // Validamos que el usuario cliente exista en la base de datos
     const existingClient = await this.userRepository.getById(cliente);
     if (!existingClient) {
+      logger.warning(`Intento de crear pedido con usuario cliente inexistente (ID: ${cliente})`);
       throw new UserNotFoundError(cliente, `No se puede crear el pedido: el usuario cliente con ID '${cliente}' no existe`);
     }
 
@@ -143,7 +145,7 @@ export class OrderService {
       );
     }
 
-    return await this.orderRepository.create({
+    const createdOrder = await this.orderRepository.create({
       codigo: orderCode,
       cliente,
       descripcion: String(descripcion).trim(),
@@ -152,6 +154,9 @@ export class OrderService {
       estado,
       prioridad,
     });
+
+    logger.info(`Pedido #${createdOrder.codigo} creado correctamente para el cliente ${cliente}`);
+    return createdOrder;
   }
 
   /**
@@ -209,7 +214,9 @@ export class OrderService {
       }
     }
 
-    return await this.orderRepository.update(id, dataToUpdate);
+    const updatedOrder = await this.orderRepository.update(id, dataToUpdate);
+    logger.info(`Pedido #${updatedOrder?.codigo || id} actualizado correctamente`);
+    return updatedOrder;
   }
 
   /**
@@ -231,6 +238,8 @@ export class OrderService {
    */
   async deleteOrder(id) {
     await this.getOrderById(id);
-    return await this.orderRepository.delete(id);
+    const deleted = await this.orderRepository.delete(id);
+    logger.info(`Pedido con ID ${id} eliminado correctamente`);
+    return deleted;
   }
 }

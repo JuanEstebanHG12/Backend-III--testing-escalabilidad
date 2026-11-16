@@ -2,6 +2,7 @@ import { UserRepository } from '../repositories/user.repository.js';
 import { OrderRepository } from '../repositories/order.repository.js';
 import { DeliveryRepository } from '../repositories/delivery.repository.js';
 import { USER_ROLES } from '../constants/index.js';
+import { logger } from '../config/logger.config.js';
 import {
   generateMockUsers,
   generateMockOrders,
@@ -30,7 +31,7 @@ const ALLOWED_COLLECTIONS = Object.freeze([
 /**
  * Capa Service de Mocks:
  * Contiene la lógica para validar parámetros, generar datos simulados en memoria y persistirlos
- * de forma controlada en MongoDB a través de los Repositories.
+ * de forma controlada en MongoDB a través de los Repositories, registrando eventos con Winston.
  * NUNCA importa Mongoose directamente.
  */
 export class MockService {
@@ -55,6 +56,7 @@ export class MockService {
       Array.isArray(qty) ||
       (typeof qty === 'string' && qty.trim() === '')
     ) {
+      logger.warning(`Cantidad inválida enviada al módulo de mocks: '${qty}' (formato vacío o no soportado)`);
       throw new InvalidMockQuantityError(
         qty,
         'La cantidad de mocks (qty) proporcionada no es válida'
@@ -64,6 +66,7 @@ export class MockService {
     const numericQty = Number(qty);
 
     if (Number.isNaN(numericQty) || !Number.isFinite(numericQty)) {
+      logger.warning(`Cantidad inválida enviada al módulo de mocks: '${qty}' (no es numérico)`);
       throw new InvalidMockQuantityError(
         qty,
         `La cantidad de mocks ('${qty}') debe ser un valor numérico válido`
@@ -71,6 +74,7 @@ export class MockService {
     }
 
     if (numericQty < 0) {
+      logger.warning(`Valor negativo enviado al módulo de mocks: qty=${numericQty}`);
       throw new NegativeValueError(
         'qty',
         numericQty,
@@ -79,6 +83,7 @@ export class MockService {
     }
 
     if (numericQty === 0) {
+      logger.warning('Cantidad inválida enviada al módulo de mocks: qty=0');
       throw new InvalidMockQuantityError(
         numericQty,
         'La cantidad de mocks debe ser mayor a 0'
@@ -86,6 +91,7 @@ export class MockService {
     }
 
     if (!Number.isInteger(numericQty)) {
+      logger.warning(`Cantidad decimal no permitida en el módulo de mocks: qty=${qty}`);
       throw new InvalidMockQuantityError(
         qty,
         `La cantidad de mocks debe ser un número entero (recibido: ${qty})`
@@ -93,6 +99,7 @@ export class MockService {
     }
 
     if (numericQty > MAX_MOCK_QUANTITY) {
+      logger.warning(`Cantidad de mocks excede el límite permitido (${MAX_MOCK_QUANTITY}): qty=${numericQty}`);
       throw new InvalidMockQuantityError(
         numericQty,
         `La cantidad solicitada (${numericQty}) excede el límite máximo permitido por operación (${MAX_MOCK_QUANTITY})`
@@ -111,11 +118,13 @@ export class MockService {
     }
 
     if (typeof collection !== 'string' || !collection.trim()) {
+      logger.warning(`Colección inválida enviada al módulo de mocks: '${collection}'`);
       throw new InvalidMockCollectionError(collection);
     }
 
     const normalized = collection.trim().toLowerCase();
     if (!ALLOWED_COLLECTIONS.includes(normalized)) {
+      logger.warning(`Colección no reconocida en el módulo de mocks: '${collection}'`);
       throw new InvalidMockCollectionError(collection);
     }
 
@@ -124,11 +133,11 @@ export class MockService {
 
   /**
    * Genera usuarios simulados en memoria sin guardarlos en la base de datos.
-   * Formato compatible con el ejemplo del entregable: { nombre, email, rol }.
    */
   getSimulatedUsers(qty) {
     const count = this.validateMockQuantity(qty);
     const users = generateMockUsers(count);
+    logger.info(`Generación de datos mock en memoria: ${count} usuarios simulados`);
     return users.map(({ nombre, email, rol }) => ({
       nombre,
       email,
@@ -141,7 +150,9 @@ export class MockService {
    */
   getSimulatedOrders(qty) {
     const count = this.validateMockQuantity(qty);
-    return generateMockOrders(count);
+    const orders = generateMockOrders(count);
+    logger.info(`Generación de datos mock en memoria: ${count} pedidos simulados`);
+    return orders;
   }
 
   /**
@@ -149,12 +160,13 @@ export class MockService {
    */
   getSimulatedDeliveries(qty) {
     const count = this.validateMockQuantity(qty);
-    return generateMockDeliveries(count);
+    const deliveries = generateMockDeliveries(count);
+    logger.info(`Generación de datos mock en memoria: ${count} entregas simuladas`);
+    return deliveries;
   }
 
   /**
-   * Genera un ecosistema completo en memoria con relaciones coherentes:
-   * Usuarios -> Pedidos (asociados a clientes) -> Entregas (asociadas a pedidos y repartidores).
+   * Genera un ecosistema completo en memoria con relaciones coherentes.
    */
   getSimulatedAll(qty) {
     const count = this.validateMockQuantity(qty);
@@ -170,6 +182,8 @@ export class MockService {
     const orderIds = orders.map((_, idx) => `mock_order_${idx + 1}`);
 
     const deliveries = generateMockDeliveries(count, orderIds, driverIds);
+
+    logger.info(`Generación de ecosistema mock completo en memoria: ${count} registros por entidad`);
 
     return {
       usuarios: users.map(({ nombre, email, rol }) => ({ nombre, email, rol })),
@@ -187,10 +201,11 @@ export class MockService {
     const normalizedCollection = this.validateCollection(collection);
 
     try {
-      // 1. Caso usuarios (coincide con el ejemplo de la consigna: POST /api/mocks/seed?qty=10)
+      // 1. Caso usuarios
       if (normalizedCollection === 'usuarios' || normalizedCollection === 'users') {
         const mockUsers = generateMockUsers(count);
         const inserted = await this.userRepository.createMany(mockUsers);
+        logger.info(`Seeding en MongoDB completado: ${inserted.length} usuarios insertados`);
         return {
           insertados: inserted.length,
           coleccion: 'usuarios',
@@ -201,7 +216,6 @@ export class MockService {
       if (normalizedCollection === 'pedidos' || normalizedCollection === 'orders') {
         let clients = await this.userRepository.getByRole(USER_ROLES.CLIENTE);
 
-        // Si no hay clientes en la DB, creamos algunos primero para mantener integridad referencial
         if (clients.length === 0) {
           const seedClients = generateMockUsers(3).map((u) => ({
             ...u,
@@ -213,6 +227,7 @@ export class MockService {
         const clientIds = clients.map((c) => c._id);
         const mockOrders = generateMockOrders(count, clientIds);
         const inserted = await this.orderRepository.createMany(mockOrders);
+        logger.info(`Seeding en MongoDB completado: ${inserted.length} pedidos insertados`);
 
         return {
           insertados: inserted.length,
@@ -225,7 +240,6 @@ export class MockService {
         let orders = await this.orderRepository.getAll();
         let drivers = await this.userRepository.getByRole(USER_ROLES.REPARTIDOR);
 
-        // Si faltan pedidos o repartidores, los sembramos para garantizar relaciones válidas
         if (drivers.length === 0) {
           const seedDrivers = generateMockUsers(2).map((u) => ({
             ...u,
@@ -253,6 +267,7 @@ export class MockService {
         const driverIds = drivers.map((d) => d._id);
         const mockDeliveries = generateMockDeliveries(count, orderIds, driverIds);
         const inserted = await this.deliveryRepository.createMany(mockDeliveries);
+        logger.info(`Seeding en MongoDB completado: ${inserted.length} entregas insertadas`);
 
         return {
           insertados: inserted.length,
@@ -281,6 +296,8 @@ export class MockService {
       const total =
         insertedUsers.length + insertedOrders.length + insertedDeliveries.length;
 
+      logger.info(`Seeding completo en MongoDB finalizado: ${total} registros totales insertados`);
+
       return {
         insertados: total,
         coleccion: 'completo',
@@ -294,6 +311,10 @@ export class MockService {
       if (error instanceof AppError) {
         throw error;
       }
+
+      logger.error(
+        `Fallo durante la carga de datos mock en MongoDB (colección '${normalizedCollection}'): ${error.message}`
+      );
 
       throw new MockSeedError(
         `Fallo durante la carga de datos simulados en MongoDB para la colección '${normalizedCollection}': ${error.message}`,
@@ -314,6 +335,7 @@ export class MockService {
       await this.deliveryRepository.deleteAll();
       await this.orderRepository.deleteAll();
       await this.userRepository.deleteAll();
+      logger.info('Colecciones de prueba (usuarios, pedidos, entregas) limpiadas en MongoDB');
       return {
         success: true,
         mensaje:
@@ -323,6 +345,8 @@ export class MockService {
       if (error instanceof AppError) {
         throw error;
       }
+
+      logger.error(`Fallo durante la limpieza de colecciones mock en MongoDB: ${error.message}`);
 
       throw new MockSeedError(
         `Fallo durante la limpieza de colecciones de prueba en MongoDB: ${error.message}`,

@@ -1,5 +1,6 @@
 import { ProductRepository } from '../repositories/product.repository.js';
 import { PRODUCT_STATUS } from '../constants/index.js';
+import { logger } from '../config/logger.config.js';
 import { isValidObjectId } from '../utils/validators.util.js';
 import {
   ProductNotFoundError,
@@ -12,7 +13,7 @@ import {
 
 /**
  * Capa Service de Productos:
- * Contiene toda la lógica de negocio y validaciones de dominio para inventario.
+ * Contiene toda la lógica de negocio, logs con Winston y validaciones de dominio para inventario.
  * Se comunica únicamente con el Repository, nunca con Mongoose directamente.
  */
 export class ProductService {
@@ -39,7 +40,6 @@ export class ProductService {
       filters.status = queryParams.status;
     }
 
-    // Regla de negocio: si el cliente pide solo disponibles o solo en stock
     if (queryParams.onlyInStock === 'true') {
       filters.stock = { $gt: 0 };
       filters.status = PRODUCT_STATUS.AVAILABLE;
@@ -59,6 +59,7 @@ export class ProductService {
 
     const product = await this.productRepository.getById(id);
     if (!product) {
+      logger.warning(`Producto no encontrado con ID: ${id}`);
       throw new ProductNotFoundError(id);
     }
     return product;
@@ -128,7 +129,6 @@ export class ProductService {
       }
     }
 
-    // Regla de negocio: determinación automática del estado según el stock usando constantes
     const status = numericStock > 0 ? PRODUCT_STATUS.AVAILABLE : PRODUCT_STATUS.OUT_OF_STOCK;
 
     const newProduct = {
@@ -140,7 +140,9 @@ export class ProductService {
       status,
     };
 
-    return await this.productRepository.create(newProduct);
+    const createdProduct = await this.productRepository.create(newProduct);
+    logger.info(`Producto creado correctamente: ${createdProduct.title} (stock: ${createdProduct.stock})`);
+    return createdProduct;
   }
 
   /**
@@ -189,11 +191,12 @@ export class ProductService {
         throw new NegativeValueError('stock', numericStock, 'El stock no puede ser negativo');
       }
       dataToUpdate.stock = numericStock;
-      // Regla de negocio: sincronizamos el estado con el stock
       dataToUpdate.status = numericStock > 0 ? PRODUCT_STATUS.AVAILABLE : PRODUCT_STATUS.OUT_OF_STOCK;
     }
 
-    return await this.productRepository.update(id, dataToUpdate);
+    const updatedProduct = await this.productRepository.update(id, dataToUpdate);
+    logger.info(`Producto con ID ${id} actualizado correctamente`);
+    return updatedProduct;
   }
 
   /**
@@ -201,6 +204,8 @@ export class ProductService {
    */
   async deleteProduct(id) {
     await this.getProductById(id);
-    return await this.productRepository.delete(id);
+    const deleted = await this.productRepository.delete(id);
+    logger.info(`Producto con ID ${id} eliminado correctamente`);
+    return deleted;
   }
 }
