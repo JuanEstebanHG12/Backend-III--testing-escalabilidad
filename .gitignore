@@ -3,3 +3,10 @@ node_modules/
 .DS_Store
 
 .agents
+
+# Archivos de logs persistidos y rotados por Winston
+logs/*.log
+logs/*.json
+logs/*.gz
+logs/*.txt
+!logs/.gitkeep
