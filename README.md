@@ -1,6 +1,6 @@
-# 📦 ShipNow API — Arquitectura por Capas, Mocking, Errores, Logging, Swagger & Testing Funcional
+# 📦 ShipNow API — Arquitectura por Capas, Mocking, Errores, Logging, Swagger, Testing & Carga de Archivos (Multer)
 
-Bienvenido al repositorio de la API de **ShipNow**, estructurada profesionalmente en **3 capas (Controller - Service - Repository)**, con validación estricta de variables de entorno, sistema de **Mocking y Seeding relacional**, **capa centralizada de manejo de errores**, **sistema de logging con Winston y rotación de archivos**, **documentación interactiva con Swagger / OpenAPI 3.0** y **suite de testing funcional con Mocha, Chai y Supertest**.
+Bienvenido al repositorio de la API de **ShipNow**, estructurada profesionalmente en **3 capas (Controller - Service - Repository)**, con validación estricta de variables de entorno, sistema de **Mocking y Seeding relacional**, **capa centralizada de manejo de errores**, **sistema de logging con Winston y rotación de archivos**, **documentación interactiva con Swagger / OpenAPI 3.0**, **suite de testing funcional con Mocha, Chai y Supertest** y **carga y gestión de documentos y comprobantes con Multer (`multipart/form-data`)**.
 
 ---
 
@@ -36,13 +36,21 @@ Bienvenido al repositorio de la API de **ShipNow**, estructurada profesionalment
 backend3/
 ├── logs/
 │   └── .gitkeep                    # Carpeta de logs documentada (archivos .log ignorados en Git)
+├── uploads/
+│   ├── documents/
+│   │   └── .gitkeep                # Subcarpeta para documentos de usuario (archivos ignorados en Git)
+│   ├── licenses/
+│   │   └── .gitkeep                # Subcarpeta para licencias de conducir (archivos ignorados en Git)
+│   └── receipts/
+│       └── .gitkeep                # Subcarpeta para comprobantes de pedidos y entregas
 ├── src/
 │   ├── config/
 │   │   ├── env.config.js           # Validación de variables de entorno y aislamiento de DB para testing
 │   │   ├── db.config.js            # Conexión centralizada a MongoDB con logs de Winston
 │   │   ├── logger.config.js        # Configuración centralizada de Winston y rotación diaria
+│   │   ├── multer.config.js        # Configuración centralizada de Multer (storage, naming, filtro MIME, límites)
 │   │   ├── swagger.config.js       # Configuración centralizada de OpenAPI 3.0.3 y Swagger UI
-│   │   └── index.js                # Re-exportación de configuración, logger y swaggerSpec
+│   │   └── index.js                # Re-exportación de configuración, logger, swaggerSpec y multerConfig
 │   ├── docs/
 │   │   ├── schemas.docs.js         # Schemas reutilizables (User, Order, OrderItem, Delivery, ErrorResponse, etc.)
 │   │   ├── users.docs.js           # Documentación del módulo Users (/api/users)
@@ -102,6 +110,7 @@ backend3/
 ├── tests/
 │   ├── test-db.helper.js           # Configuración y limpieza automática de base de datos de testing
 │   ├── functional.api.test.js      # Suite de tests funcionales end-to-end (Mocha, Chai, Supertest)
+│   ├── uploads.test.js             # Suite de tests funcionales de carga de documentos y comprobantes con Multer
 │   ├── error-handling.test.js      # Pruebas del diccionario de errores, middleware y servicios
 │   ├── logger.test.js              # Pruebas de niveles de Winston, formato y /logs/error.log
 │   └── swagger.test.js             # Pruebas de especificación OpenAPI y ruta /api/docs
@@ -111,6 +120,42 @@ backend3/
 ├── package.json
 └── README.md
 ```
+
+---
+
+## 📎 Carga de Archivos, Documentos y Comprobantes con Multer (Pre-entrega Módulo 7)
+
+### 1. Configuración Centralizada de Multer (`src/config/multer.config.js`)
+La configuración de Multer está completamente desacoplada de los routers:
+- **Estructura de carpetas (`uploads/`)**:
+  - `uploads/documents/`: documentos generales de usuario (`identificacion`, `comprobante_domicilio`, `contrato`).
+  - `uploads/licenses/`: licencias de conducir de usuarios/repartidores (`licencia`).
+  - `uploads/receipts/`: comprobantes asociados a pedidos y entregas (`comprobante_pago`, `comprobante_entrega`, `factura`, `remito`).
+  - Los archivos subidos están ignorados en `.gitignore` (solo se conservan los `.gitkeep`).
+- **Nomenclatura segura**: `<timestamp>-<random>-<nombre_sanitizado>.<ext>`.
+- **Formatos permitidos**: `application/pdf`, `image/jpeg`, `image/jpg`, `image/png`, `image/webp` (`.pdf`, `.jpg`, `.jpeg`, `.png`, `.webp`).
+- **Tamaño máximo**: `5 MB` (`5 * 1024 * 1024` bytes).
+- **Solo metadatos en MongoDB**: en las entidades `User` (`documents`), `Order` (`comprobantes`) y `Delivery` (`comprobantes`) se almacenan únicamente los metadatos (`originalName`, `generatedName`, `path`, `mimeType`, `size`, `documentType`, `uploadedAt`), nunca el binario del archivo.
+
+### 2. Endpoints de Carga (`multipart/form-data`)
+- **`POST /api/users/:id/documents`**:
+  - Campos `multipart/form-data`: `file` (archivo) y `documentType` (`identificacion`, `licencia`, `comprobante_domicilio`, `contrato`).
+  - Verifica que el usuario exista, valida el archivo y tipo de documento, guarda el archivo en `uploads/documents` o `uploads/licenses` y registra los metadatos en el usuario.
+- **`POST /api/orders/:id/receipt`**:
+  - Campos `multipart/form-data`: `file` (archivo) y `documentType` opcional (`comprobante_pago`, `comprobante_entrega`, `factura`, `remito`).
+  - Verifica que el pedido exista, guarda el comprobante en `uploads/receipts` y registra los metadatos en el pedido.
+- **`POST /api/deliveries/:id/receipt`**:
+  - Campos `multipart/form-data`: `file` (archivo) y `documentType` opcional (`comprobante_entrega`, `comprobante_pago`, `factura`, `remito`).
+  - Verifica que la entrega exista, guarda el comprobante en `uploads/receipts` y registra los metadatos en la entrega.
+
+### 3. Errores Específicos Integrados al Middleware Global
+- `FILE_REQUIRED` (`400`): falta el archivo en la solicitud.
+- `INVALID_FILE_TYPE` (`400`): extensión o MIME type no permitido.
+- `FILE_SIZE_EXCEEDED` (`400`): tamaño mayor a 5 MB.
+- `INVALID_FILE_FIELD` (`400`): nombre de campo multipart inesperado.
+- `INVALID_DOCUMENT_TYPE` (`400`): tipo de documento o comprobante no válido.
+- `USER_NOT_FOUND` / `ORDER_NOT_FOUND` / `DELIVERY_NOT_FOUND` (`404`): entidad inexistente (elimina automáticamente el archivo temporal para no dejar archivos huérfanos).
+- `FILE_SAVE_ERROR` (`500`): error al almacenar o persistir metadatos.
 
 ---
 
