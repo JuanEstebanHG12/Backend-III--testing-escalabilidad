@@ -1,39 +1,36 @@
-import { describe, it } from 'node:test';
-import assert from 'node:assert/strict';
+import { expect } from 'chai';
+import request from 'supertest';
 import app from '../src/app.js';
 import { swaggerSpec } from '../src/config/swagger.config.js';
 
 describe('Pre-entrega Módulo 5 — Documentación de API con Swagger/OpenAPI', () => {
   describe('1. Información General, Tags y Schemas Reutilizables', () => {
     it('Debe contener información general completa (title, version, description, servers)', () => {
-      assert.equal(swaggerSpec.openapi, '3.0.3');
-      assert.ok(swaggerSpec.info.title);
-      assert.ok(swaggerSpec.info.version);
-      assert.ok(swaggerSpec.info.description);
-      assert.ok(Array.isArray(swaggerSpec.servers));
-      assert.ok(swaggerSpec.servers.length >= 1);
-      assert.ok(swaggerSpec.servers[0].url.includes('http://localhost'));
+      expect(swaggerSpec.openapi).to.equal('3.0.3');
+      expect(swaggerSpec.info.title).to.be.a('string').and.not.be.empty;
+      expect(swaggerSpec.info.version).to.be.a('string').and.not.be.empty;
+      expect(swaggerSpec.info.description).to.be.a('string').and.not.be.empty;
+      expect(swaggerSpec.servers).to.be.an('array').with.lengthOf.at.least(1);
+      expect(swaggerSpec.servers[0].url).to.include('http://localhost');
     });
 
     it('Debe agrupar la documentación en los tags requeridos: Users, Orders, Deliveries, Mocks, Logger', () => {
       const tagNames = swaggerSpec.tags.map((t) => t.name);
       for (const requiredTag of ['Users', 'Orders', 'Deliveries', 'Mocks', 'Logger']) {
-        assert.equal(
-          tagNames.includes(requiredTag),
-          true,
-          `El tag '${requiredTag}' debe estar definido en swaggerSpec.tags`
-        );
+        expect(tagNames).to.include(requiredTag);
       }
     });
 
     it('Debe incluir schemas reutilizables para usuario, pedido, entrega, ítem de pedido, respuesta exitosa y respuesta de error', () => {
       const schemas = swaggerSpec.components.schemas;
-      assert.ok(schemas.User, 'Debe existir schema User (usuario)');
-      assert.ok(schemas.Order, 'Debe existir schema Order (pedido)');
-      assert.ok(schemas.OrderItem, 'Debe existir schema OrderItem (ítem de pedido)');
-      assert.ok(schemas.Delivery, 'Debe existir schema Delivery (entrega)');
-      assert.ok(schemas.SuccessResponse, 'Debe existir schema SuccessResponse (respuesta exitosa)');
-      assert.ok(schemas.ErrorResponse, 'Debe existir schema ErrorResponse (respuesta de error)');
+      expect(schemas).to.include.all.keys(
+        'User',
+        'Order',
+        'OrderItem',
+        'Delivery',
+        'SuccessResponse',
+        'ErrorResponse'
+      );
     });
   });
 
@@ -41,66 +38,47 @@ describe('Pre-entrega Módulo 5 — Documentación de API con Swagger/OpenAPI', 
     it('Debe documentar todos los endpoints principales y coincidir con las rutas reales', () => {
       const paths = swaggerSpec.paths;
 
-      // Users
-      assert.ok(paths['/api/users']?.get);
-      assert.ok(paths['/api/users']?.post);
-      assert.ok(paths['/api/users/{id}']?.get);
-      assert.ok(paths['/api/users/{id}']?.put);
-      assert.ok(paths['/api/users/{id}']?.delete);
+      expect(paths['/api/users']?.get).to.be.an('object');
+      expect(paths['/api/users']?.post).to.be.an('object');
+      expect(paths['/api/users/{id}']?.get).to.be.an('object');
+      expect(paths['/api/users/{id}']?.put).to.be.an('object');
+      expect(paths['/api/users/{id}']?.delete).to.be.an('object');
 
-      // Orders
-      assert.ok(paths['/api/orders']?.get);
-      assert.ok(paths['/api/orders']?.post);
-      assert.ok(paths['/api/orders/{id}']?.get);
-      assert.ok(paths['/api/orders/{id}']?.put);
-      assert.ok(paths['/api/orders/{id}']?.delete);
-      assert.ok(paths['/api/orders/{id}/status']?.patch);
+      expect(paths['/api/orders']?.get).to.be.an('object');
+      expect(paths['/api/orders']?.post).to.be.an('object');
+      expect(paths['/api/orders/{id}']?.get).to.be.an('object');
+      expect(paths['/api/orders/{id}']?.put).to.be.an('object');
+      expect(paths['/api/orders/{id}']?.delete).to.be.an('object');
+      expect(paths['/api/orders/{id}/status']?.patch).to.be.an('object');
 
-      // Deliveries
-      assert.ok(paths['/api/deliveries']?.get);
-      assert.ok(paths['/api/deliveries']?.post);
-      assert.ok(paths['/api/deliveries/{id}']?.get);
-      assert.ok(paths['/api/deliveries/{id}']?.put);
-      assert.ok(paths['/api/deliveries/{id}']?.delete);
+      expect(paths['/api/deliveries']?.get).to.be.an('object');
+      expect(paths['/api/deliveries']?.post).to.be.an('object');
+      expect(paths['/api/deliveries/{id}']?.get).to.be.an('object');
+      expect(paths['/api/deliveries/{id}']?.put).to.be.an('object');
+      expect(paths['/api/deliveries/{id}']?.delete).to.be.an('object');
 
-      // Mocks
-      assert.ok(paths['/api/mocks/users']?.get);
-      assert.ok(paths['/api/mocks/orders']?.get);
-      assert.ok(paths['/api/mocks/deliveries']?.get);
-      assert.ok(paths['/api/mocks/all']?.get);
-      assert.ok(paths['/api/mocks/seed']?.post);
-      assert.ok(paths['/api/mocks/clear']?.delete);
+      expect(paths['/api/mocks/users']?.get).to.be.an('object');
+      expect(paths['/api/mocks/orders']?.get).to.be.an('object');
+      expect(paths['/api/mocks/deliveries']?.get).to.be.an('object');
+      expect(paths['/api/mocks/all']?.get).to.be.an('object');
+      expect(paths['/api/mocks/seed']?.post).to.be.an('object');
+      expect(paths['/api/mocks/clear']?.delete).to.be.an('object');
 
-      // Logger
-      assert.ok(paths['/api/loggerTest']?.get);
-      assert.equal(
-        paths['/api/loggerTest'].get.description.toLowerCase().includes('validación'),
-        true,
-        'La documentación de /api/loggerTest debe aclarar que es una herramienta de validación'
-      );
+      expect(paths['/api/loggerTest']?.get).to.be.an('object');
+      expect(paths['/api/loggerTest'].get.description.toLowerCase()).to.include('validación');
     });
   });
 
-  describe('3. Exposición de Swagger UI en /api/docs y /api/docs.json', () => {
+  describe('3. Exposición de Swagger UI en /api/docs y /api/docs.json con Supertest', () => {
     it('Debe servir la interfaz interactiva Swagger UI en GET /api/docs/ y el JSON en GET /api/docs.json', async () => {
-      const server = app.listen(0);
-      const { port } = server.address();
-      const baseUrl = `http://127.0.0.1:${port}`;
+      const uiRes = await request(app).get('/api/docs/');
+      expect(uiRes.status).to.equal(200);
+      expect(uiRes.text).to.include('swagger-ui');
 
-      try {
-        const uiRes = await fetch(`${baseUrl}/api/docs/`);
-        const uiHtml = await uiRes.text();
-        assert.equal(uiRes.status, 200);
-        assert.equal(uiHtml.includes('swagger-ui'), true);
-
-        const jsonRes = await fetch(`${baseUrl}/api/docs.json`);
-        const jsonSpec = await jsonRes.json();
-        assert.equal(jsonRes.status, 200);
-        assert.equal(jsonSpec.openapi, '3.0.3');
-        assert.ok(jsonSpec.components.schemas.OrderItem);
-      } finally {
-        server.close();
-      }
+      const jsonRes = await request(app).get('/api/docs.json');
+      expect(jsonRes.status).to.equal(200);
+      expect(jsonRes.body.openapi).to.equal('3.0.3');
+      expect(jsonRes.body.components.schemas).to.have.property('OrderItem');
     });
   });
 });
